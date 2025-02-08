@@ -1,44 +1,102 @@
 #include <matplot/matplot.h>
 
-#include <atomic>
-#include <flat_map>
-#include <flat_set>
+#include <algorithm>
+#include <cassert>
 #include <iterator>
 #include <random>
 #include <ranges>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace abmoid {
 
-struct entity {
+struct agent {
   using id_type = uint_fast32_t;
   id_type id;
 
-  static entity create() {
-    static std::atomic<id_type> global_id{1};
-    return entity{global_id.fetch_add(1)};
+  bool is_valid() const {
+    return id != 0;
   }
 };
 
 }
 
 template <>
-struct std::hash<abmoid::entity> {
-  uint32_t operator()(abmoid::entity entity) const noexcept {
-    return std::hash<decltype(entity.id)>{}(entity.id);
+struct std::hash<abmoid::agent> {
+  uint32_t operator()(abmoid::agent agent) const noexcept {
+    return std::hash<abmoid::agent::id_type>{}(agent.id);
   }
 };
 
 namespace abmoid {
 
-template <typename Component>
-class entity_component {
-  std::flat_map<entity, Component> storage;
-};
+template <typename Value>
+class agent_component {
+  using value_storage = std::vector<Value>;
+  using agent_storage = std::vector<agent>;
+  using lookup_storage = std::unordered_map<agent, unsigned>;
+  using index_t = unsigned;
 
-struct mean {
-  double value;
+  value_storage values;
+  agent_storage agents;
+  lookup_storage lookup;
+
+public:
+  using iterator = value_storage::iterator;
+
+  void clear() {
+    values.clear();
+    agents.clear();
+    lookup.clear();
+  }
+
+  auto size() const { return values.size(); }
+  iterator begin() const { return values.begin(); }
+  iterator end() const { return values.end(); }
+  iterator erase(iterator itr) {
+    index_t index = std::distance(values.begin());
+    auto agent_itr = agents.begin() + index;
+    auto lookup_itr = lookup.find(get_agent(itr));
+    assert(agents.size() >= index &&
+        "corresponding agent entry should exist");
+    assert(lookup_itr != lookup.end() &&
+        "component must exist to erase it");
+    lookup.erase(lookup_itr);
+
+    // Remove the value and agent entries by
+    // swapping with the last element so we can efficiently
+    // remove the element without reindexing everything.
+    using std::swap;
+    swap(*itr, values.back());
+    swap(*agent_itr, agents.back());
+    lookup[*agent_itr] = index;
+    values.pop_back();
+    agents.pop_back();
+
+    // Behave like Container `erase`.
+    return ++itr;
+  }
+
+  bool contains(agent a) {
+    return lookup.contains(a);
+  }
+
+  template <typename V>
+  Value& create(agent a, V&& value) {
+    assert(!contains(a) && "only one component per entity is allowed");
+    lookup[a] = values.size();
+    values.push_back(std::forward<V>(value));
+    return values.back();
+  }
+
+  agent get_agent(index_t index) {
+    return agents[index];
+  }
+
+  agent get_agent(iterator itr) {
+    return get_agent(std::distance(values.begin(), itr));
+  }
 };
 
 template <typename DistImpl>
@@ -47,121 +105,129 @@ class distribution : std::ranges::view_interface<distribution<DistImpl>> {
   DistImpl dist;
 
 public:
-  class iterator;
-
   template <typename ...Args>
   distribution(std::mt19937& gen, Args&& ...args)
     : gen(gen),
       dist(std::forward<Args>(args)...)
   { }
 
-  iterator begin();
-  auto end() {
+  class iterator {
+    using Range = distribution;
+
+    Range* range;
+    DistImpl::result_type value;
+
+    DistImpl::result_type get_next() {
+      return range->dist(range->gen);
+    }
+
+    iterator(Range* range)
+      : range(range),
+        value(get_next())
+    { }
+
+  public:
+    using difference_type = std::ptrdiff_t;
+    using value_type = DistImpl::result_type;
+
+    value_type operator*() const {
+      return value;
+    }
+
+    iterator& operator++() {
+      value = get_next();
+      return *this;
+    }
+
+    void operator++(int) {
+      ++*this;
+    }
+  };
+
+  iterator begin() const {
+    return iterator(this);
+  }
+  auto end() const {
     return std::unreachable_sentinel;
-  }
-};
-
-template <typename DistImpl>
-class distribution<DistImpl>::iterator {
-  friend class distribution<DistImpl>;
-  using Range = distribution<DistImpl>;
-
-  Range* range;
-  DistImpl::result_type value;
-
-  DistImpl::result_type get_next() {
-    return range->dist(range->gen);
-  }
-
-  iterator(Range* range)
-    : range(range),
-      value(get_next())
-  { }
-
-public:
-  using difference_type = std::ptrdiff_t;
-  using value_type = DistImpl::result_type;
-
-  value_type operator*() const {
-    return value; 
-  }
-
-  iterator& operator++() {
-    value = get_next();
-    return *this;
-  }
-
-  void operator++(int) {
-    ++*this;
   }
 };
 
 using weibull_dist = distribution<std::weibull_distribution<>>;
 using exponential_dist = distribution<std::exponential_distribution<>>;
 
-static_assert(std::input_iterator<weibull_dist::iterator>);
-static_assert(std::input_iterator<exponential_dist::iterator>);
-
-
-template <typename DistImpl>
-distribution<DistImpl>::iterator distribution<DistImpl>::begin() {
-  return distribution<DistImpl>::iterator(this);
-}
-
+static_assert(std::input_iterator<typename weibull_dist::iterator>);
+static_assert(std::input_iterator<typename exponential_dist::iterator>);
 }  // namespace abmoid
+
+struct susceptible_state { };
+struct recovered_state { };
 
 struct infected_state {
   // Frames until recovered.
   unsigned timer;
 };
 
-struct agent_sir_model {
+class agent_sir_model {
+  using id_type = abmoid::agent::id_type;
+
   double gamma;
   double beta;
   double beta_star;
   double recover_mean;
+  unsigned N; // Population size
   unsigned contact_factor;
   std::mt19937 gen;
-  std::vector<entity> population;
-  std::flat_set<entity> susceptible;
-  std::flat_map<entity, infected_state> infected;
-  std::flat_set<entity> recovered;
+  abmoid::agent_component<susceptible_state> susceptible;
+  abmoid::agent_component<infected_state> infected;
+  abmoid::agent_component<recovered_state> recovered;
 
-  agent_sir_model(unsigned N, double gamma, double beta,
-                  unsigned contact_factor)
-    : gamma(gamma),
-      beta(beta),
-      beta_star(beta * 1.0 / contact_factor),
-      recover_mean(gen, 1.0 / gamma),
-      contact_factor(contact_factor),
-      gen(),
-      population(N)
-  {
-    // Initialize population.
-    for (entity& e : population)
-      e = entity::create();
-    // TODO Initialize susceptibles and infecteds.
+  void init(unsigned initial_infecteds) {
+    // Each agent is denoted implicitly by an id that
+    // is in the range [1, N].
+    id_type i = 1;
+    for (; i < initial_infecteds; ++i)
+      assign_infected_state(abmoid::agent{i});
+    for (; i < N; ++i)
+      susceptible.create(abmoid::agent{i}, susceptible_state{});
+  }
+
+  double gen_uniform_random() {
+    return std::uniform_real_distribution<double>()(gen);
+  }
+
+  // Select a random agent from the population.
+  abmoid::agent select_random_agent() {
+    return abmoid::agent{std::uniform_int_distribution<id_type>(1, N)(gen)};
+  }
+
+  void assign_infected_state(abmoid::agent a) {
+    double rand = std::exponential_distribution<>()(gen);
+    infected.create(a, infected_state{static_cast<unsigned>(rand * 1000.0)});
+  }
+
+  bool is_valid() const {
+    // TODO Check that the intersection
+    //      of sets of agents in each set is empty.
+    // The SIR states are mutually exclusive.
+    return N == susceptible.size() +
+                infected.size() +
+                recovered.size();
   }
 
   void update_susceptible() {
     // Iterate susceptibles and possibly make sick.
     for (auto itr = susceptible.begin(); itr != susceptible.end();) {
-      size_t n = population.size();
-      bool contact = false;
       // Choose 3 randos and check for infectedness.
       for (unsigned i = 0; i < contact_factor; ++i) {
-        entity e = population[gen() % n];
-        if (infected.contains(e))
-          contact = contact || infected.contains(e);
-      }
-      // TODO Use beta_star to determine infection.
-      if (contact) {
-        // TODO Use random timer value (exp_dist(1 / gamma) * 1000)
-        abmoid::exponential_dist dist(gen, recover_mean);
-        infected[*itr] = infected_state{std::floor(dist() * 1000.0)};
-        itr = susceptible.erase(itr);
-      } else {
-        ++itr;
+        abmoid::agent e = select_random_agent();
+        if (infected.contains(e) && gen_uniform_random() < beta_star) {
+          // Create random duration based on exponential distribution.
+          assign_infected_state(susceptible.get_agent(itr));
+          itr = susceptible.erase(itr);
+          break;
+        } else {
+          ++itr;
+        }
       }
     }
   }
@@ -169,11 +235,13 @@ struct agent_sir_model {
   void update_infected() {
     // Iterate infecteds updating timer and possibly make recovered.
     for (auto itr = infected.begin(); itr != infected.end();) {
-      auto [ent, state] = *itr;
+      infected_state& state = *itr;
       if (state.timer == 0) {
-        recovered.insert(ent);
+        abmoid::agent agent = infected.get_agent(itr);
+        recovered.create(agent, recovered_state{});
         infected.erase(itr);
       } else {
+        state.timer -= 1;
         ++itr;
       }
     }
@@ -183,44 +251,73 @@ struct agent_sir_model {
     // Do nothing.
   }
 
+public:
+  struct parameters {
+    double gamma;
+    double beta;
+    unsigned N;
+    unsigned initial_infecteds;
+    unsigned contact_factor;
+  };
+
+  agent_sir_model(parameters params)
+    : gamma(params.gamma),
+      beta(params.beta),
+      beta_star(params.beta * 1.0 / params.contact_factor),
+      recover_mean(1.0 / params.gamma),
+      contact_factor(params.contact_factor),
+      gen(),
+      N(params.N)
+  {
+    init(params.initial_infecteds);
+  }
+
+  void reset(unsigned initial_infecteds) {
+    susceptible.clear();
+    infected.clear();
+    recovered.clear();
+    init(initial_infecteds);
+  }
+
   // Each frame we call update.
   void update() {
     update_susceptible();
     update_infected();
     update_recovered();
   }
-
 };
-
 
 int main() {
   std::mt19937 gen;
   int const N = 1000;
   std::vector<double> results(N, 0.0);
-  auto mu_values = std::array<double, 4>{{0.5, 1.0, 1.5, 5.0}};
+
+  agent_sir_model model({.gamma = 0.50,
+                         .beta = 0.50,
+                         .N = 10000,
+                         .initial_infecteds = 10,
+                         .contact_factor = 3});
+
+  // Simulate stuff.
+  abmoid::exponential_dist dist(gen, 1.0 / mu);
+  for (auto [result, value] : std::views::zip(results, dist))
+    result = value;
 
   // Plot stuff.
+  auto figure = matplot::figure(true);
+  //matplot::title("Expontential Distribution");
+  matplot::title(std::string("Exponential Distribution (mu = ") +
+                 std::to_string(mu) +
+                 ")");
+  matplot::hold(matplot::on);
 
-  for (auto [i, mu] : std::views::enumerate(mu_values)) {
-    auto figure = matplot::figure(true);
-    //matplot::title("Expontential Distribution");
-    matplot::title(std::string("Exponential Distribution (mu = ") +
-                   std::to_string(mu) +
-                   ")");
-    matplot::hold(matplot::on);
 
-    // Simulate stuff.
-    abmoid::exponential_dist dist(gen, 1.0 / mu);
-    for (auto [result, value] : std::views::zip(results, dist))
-      result = value;
+  auto plot1 = matplot::hist(results, 50);
+  plot1->normalization(matplot::histogram::normalization::pdf);
+  plot1->line_width(2);
 
-    auto plot1 = matplot::hist(results, 50);
-    plot1->normalization(matplot::histogram::normalization::pdf);
-    plot1->line_width(2);
-
-    matplot::save(std::string("img/exponential_dist_") +
-                  std::to_string(i + 1) +
-                  ".png");
-    matplot::hold(matplot::off);
-  }
+  matplot::save(std::string("img/exponential_dist_") +
+                std::to_string(i + 1) +
+                ".png");
+  matplot::hold(matplot::off);
 }
