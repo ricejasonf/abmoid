@@ -18,6 +18,8 @@ struct agent {
   bool is_valid() const {
     return id != 0;
   }
+
+  bool operator==(agent const&) const = default;
 };
 
 }
@@ -53,12 +55,14 @@ public:
 
   auto size() const { return values.size(); }
   iterator begin() const { return values.begin(); }
+  iterator begin() { return values.begin(); }
   iterator end() const { return values.end(); }
+  iterator end() { return values.end(); }
   iterator erase(iterator itr) {
-    index_t index = std::distance(values.begin());
+    index_t index = std::distance(values.begin(), itr);
     auto agent_itr = agents.begin() + index;
     auto lookup_itr = lookup.find(get_agent(itr));
-    assert(agents.size() >= index &&
+    assert(agents.size() > index &&
         "corresponding agent entry should exist");
     assert(lookup_itr != lookup.end() &&
         "component must exist to erase it");
@@ -74,8 +78,8 @@ public:
     values.pop_back();
     agents.pop_back();
 
-    // Behave like Container `erase`.
-    return ++itr;
+    // Since itr was swapped with the back, we do not increment.
+    return itr;
   }
 
   bool contains(agent a) {
@@ -87,10 +91,12 @@ public:
     assert(!contains(a) && "only one component per entity is allowed");
     lookup[a] = values.size();
     values.push_back(std::forward<V>(value));
+    agents.push_back(a);
     return values.back();
   }
 
-  agent get_agent(index_t index) {
+  agent get_agent(index_t index) const {
+    assert(index < agents.size());
     return agents[index];
   }
 
@@ -218,16 +224,20 @@ class agent_sir_model {
     // Iterate susceptibles and possibly make sick.
     for (auto itr = susceptible.begin(); itr != susceptible.end();) {
       // Choose 3 randos and check for infectedness.
+      bool is_infected = false;
       for (unsigned i = 0; i < contact_factor; ++i) {
         abmoid::agent e = select_random_agent();
         if (infected.contains(e) && gen_uniform_random() < beta_star) {
-          // Create random duration based on exponential distribution.
-          assign_infected_state(susceptible.get_agent(itr));
-          itr = susceptible.erase(itr);
+          is_infected = true;
           break;
-        } else {
-          ++itr;
         }
+      }
+      if (is_infected) {
+        // Create random duration based on exponential distribution.
+        assign_infected_state(susceptible.get_agent(itr));
+        itr = susceptible.erase(itr);
+      } else {
+          ++itr;
       }
     }
   }
@@ -285,39 +295,57 @@ public:
     update_infected();
     update_recovered();
   }
+
+  auto get_state() const {
+    return std::array<size_t, 3>{{
+      susceptible.size(),
+      infected.size(),
+      recovered.size()
+    }};
+  }
 };
 
 int main() {
   std::mt19937 gen;
-  int const N = 1000;
-  std::vector<double> results(N, 0.0);
+  int const total_frames = 3640;
+  std::vector<double> S_counts(total_frames, 0.0);
+  std::vector<double> I_counts(total_frames, 0.0);
+  std::vector<double> R_counts(total_frames, 0.0);
 
-  agent_sir_model model({.gamma = 0.50,
-                         .beta = 0.50,
-                         .N = 10000,
-                         .initial_infecteds = 10,
-                         .contact_factor = 3});
+  agent_sir_model sir({.gamma = 0.10,
+                       .beta = 0.24,
+                       .N = 1000,
+                       .initial_infecteds = 1,
+                       .contact_factor = 3});
 
   // Simulate stuff.
-  abmoid::exponential_dist dist(gen, 1.0 / mu);
-  for (auto [result, value] : std::views::zip(results, dist))
-    result = value;
+  for (unsigned i = 0; i < total_frames; ++i) {
+    sir.update();
+    auto [S, I, R] = sir.get_state();
+    S_counts[i] = static_cast<double>(S);
+    I_counts[i] = static_cast<double>(I);
+    R_counts[i] = static_cast<double>(R);
+  }
 
   // Plot stuff.
   auto figure = matplot::figure(true);
-  //matplot::title("Expontential Distribution");
-  matplot::title(std::string("Exponential Distribution (mu = ") +
-                 std::to_string(mu) +
-                 ")");
+  matplot::title("Agent Based SIR Model");
+  matplot::legend(matplot::on);
   matplot::hold(matplot::on);
 
 
-  auto plot1 = matplot::hist(results, 50);
-  plot1->normalization(matplot::histogram::normalization::pdf);
+  auto plot1 = matplot::plot(S_counts);
   plot1->line_width(2);
+  plot1->display_name("S");
 
-  matplot::save(std::string("img/exponential_dist_") +
-                std::to_string(i + 1) +
-                ".png");
+  auto plot2 = matplot::plot(I_counts);
+  plot2->line_width(2);
+  plot2->display_name("I");
+
+  auto plot3 = matplot::plot(R_counts);
+  plot3->line_width(2);
+  plot3->display_name("R");
+
+  matplot::save("img/b_plot.png");
   matplot::hold(matplot::off);
 }
