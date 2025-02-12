@@ -66,6 +66,12 @@ public:
         "corresponding agent entry should exist");
     assert(lookup_itr != lookup.end() &&
         "component must exist to erase it");
+
+    if (size() == 1) {
+      clear();
+      return end();
+    }
+
     lookup.erase(lookup_itr);
 
     // Remove the value and agent entries by
@@ -191,9 +197,9 @@ class agent_sir_model {
     // Each agent is denoted implicitly by an id that
     // is in the range [1, N].
     id_type i = 1;
-    for (; i < initial_infecteds; ++i)
+    for (; i <= initial_infecteds; ++i)
       assign_infected_state(abmoid::agent{i});
-    for (; i < N; ++i)
+    for (; i <= N; ++i)
       susceptible.create(abmoid::agent{i}, susceptible_state{});
   }
 
@@ -207,8 +213,11 @@ class agent_sir_model {
   }
 
   void assign_infected_state(abmoid::agent a) {
-    double rand = std::exponential_distribution<>()(gen);
-    infected.create(a, infected_state{static_cast<unsigned>(rand * 1000.0)});
+    // double rand = std::exponential_distribution<>(recover_mean)(gen);
+
+    // infected.create(a, infected_state{static_cast<unsigned>(rand * 145.0)});
+    // Every day 10% of infecteds heal. Somehow a timer of 7 does the job.
+    infected.create(a, infected_state{static_cast<unsigned>(7)});
   }
 
   bool is_valid() const {
@@ -273,8 +282,8 @@ public:
   agent_sir_model(parameters params)
     : gamma(params.gamma),
       beta(params.beta),
-      beta_star(params.beta * 1.0 / params.contact_factor),
-      recover_mean(1.0 / params.gamma),
+      beta_star(params.beta / params.contact_factor),
+      recover_mean(1.0 / params.gamma), // ??
       contact_factor(params.contact_factor),
       gen(),
       N(params.N)
@@ -307,7 +316,7 @@ public:
 
 int main() {
   std::mt19937 gen;
-  int const total_frames = 3640;
+  int const total_frames = 364;
   std::vector<double> S_counts(total_frames, 0.0);
   std::vector<double> I_counts(total_frames, 0.0);
   std::vector<double> R_counts(total_frames, 0.0);
