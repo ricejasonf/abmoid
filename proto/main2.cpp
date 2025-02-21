@@ -212,13 +212,13 @@ class agent_sir_model {
   }
 
   void assign_infected_state(abmoid::agent a) {
-    // Every day 10% of infecteds recover.
-    // double rand = std::exponential_distribution<>(gamma)(gen);
-    // unsigned initial_timer = static_cast<unsigned>(std::round(rand));
+    double rand = std::exponential_distribution<>(gamma)(gen);
+    unsigned initial_timer = static_cast<unsigned>(std::round(rand));
 
-    // Somehow a timer of 7 does the job.
-    unsigned initial_timer = 7;  // Frames (days?)
-    infected.create(a, infected_state{7});
+    // Just use a "random" timer of 7.
+    initial_timer = 7;  // Frames (days?)
+
+    infected.create(a, infected_state{initial_timer});
   }
 
   bool is_valid() const {
@@ -283,7 +283,7 @@ public:
   agent_sir_model(parameters params)
     : gamma(params.gamma),
       beta(params.beta),
-      beta_star(params.beta / params.contact_factor),
+      beta_star(params.beta * params.contact_factor),
       contact_factor(params.contact_factor),
       gen(),
       N(params.N)
@@ -325,7 +325,7 @@ int main() {
                        .beta = 0.24,
                        .N = 1000,
                        .initial_infecteds = 1,
-                       .contact_factor = 3});
+                       .contact_factor = 1});
 
   // Simulate stuff.
   for (unsigned i = 0; i < total_frames; ++i) {
