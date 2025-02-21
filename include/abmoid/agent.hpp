@@ -1,22 +1,28 @@
 #ifndef ABMOID_AGENT_HPP
 #define ABMOID_AGENT_HPP
 
+#include <cstdint>
+#include <functional>
+#include <iterator>
+#include <random>
+
 namespace abmoid {
 
 template <typename Agent>
-class population;
+class population_t;
 
-template <typename T>
+template <typename IdType>
 class agent_t {
-  friend class population<agent_t<T>>;
-  using id_type = uint_fast32_t;
-  id_type id;
+protected:
+  friend class population_t<agent_t<IdType>>;
+  IdType id;
 
-  explicit agent_t(id_type id)
+  explicit agent_t(IdType id)
     : id(id)
   { }
 
 public:
+  using id_type = uint_fast32_t;
 
   agent_t() = default;
 
@@ -28,31 +34,48 @@ public:
     return id;
   }
 
-  bool operator==(agent const&) const = default;
+  bool operator==(agent_t const&) const = default;
 };
 
-struct agent : public agent_t<void>
-{ };
+class agent : public agent_t<uint_fast32_t>
+{
+  friend class population_t<agent>;
+  agent(uint_fast32_t id)
+    : agent_t<uint_fast32_t>(id)
+  { }
+};
+
+template <typename X>
+concept Agent = requires(X x) {
+  ([]<typename IdType>(agent_t<IdType> const&) { })(x);
+};
 
 template <typename Agent>
-class population {
+class population_t {
   using id_type = Agent::id_type;
 
-  id_type size;
+  id_type N;
 
 public:
-  explicit population(id_type size)
-    : size(size)
+  explicit population_t(id_type N)
+    : N(N)
   { }
 
   class iterator {
     id_type current;
   public:
-    using difference_type = id_type;
+    using difference_type = std::ptrdiff_t;
     using value_type = Agent;
 
+    iterator() = default;
+    explicit iterator(id_type c)
+      : current(c)
+    { }
+
+    auto operator<=>(iterator const&) const = default;
+
     value_type operator*() const {
-      return Agent{current};
+      return Agent(current);
     }
 
     iterator& operator++() {
@@ -60,26 +83,92 @@ public:
       return *this;
     }
 
-    void operator++(int) {
+    iterator operator++(int) {
+      iterator temp = *this;
       ++*this;
+      return temp;
+    }
+
+    iterator& operator--() {
+      --current;
+      return *this;
+    }
+
+    iterator operator--(int) {
+      iterator temp = *this;
+      --*this;
+      return temp;
+    }
+
+    iterator operator+(difference_type n) const {
+      return iterator{current + n};
+    }
+
+    iterator operator-(difference_type n) const {
+      return iterator{current - n};
+    }
+
+    friend
+    iterator operator+(difference_type n, iterator const& itr) {
+      return iterator{n + itr.current};
+    }
+
+    friend
+    iterator operator-(difference_type n, iterator const& itr) {
+      return iterator{n - itr.current};
+    }
+
+    iterator& operator+=(difference_type n) {
+      current += n;
+      return *this;
+    }
+
+    iterator& operator-=(difference_type n) {
+      current -= n;
+      return *this;
+    }
+
+    Agent operator[](difference_type n) const {
+      return *iterator{current + n};
+    }
+
+    difference_type operator-(iterator const& other) const {
+      return current - other.current;
     }
   };
 
-  iterator begin() {
+  static_assert(std::random_access_iterator<iterator>);
+
+  id_type size() const {
+    return N;
+  }
+
+  iterator begin() const {
     return iterator{1};
   }
 
-  iterator end() {
+  iterator end() const {
     return iterator{N + 1};
+  }
+
+  template <typename Gen>
+  agent select_random(Gen& gen) const {
+    return Agent(std::uniform_int_distribution<id_type>(1, N)(gen));
   }
 };
 
+
+using population = population_t<agent>;
+
+static_assert(std::ranges::random_access_range<population>);
+
 }
 
-template <>
-struct std::hash<abmoid::agent> {
-  uint32_t operator()(abmoid::agent agent) const noexcept {
-    return std::hash<abmoid::agent::id_type>{}(agent.get_id());
+template <abmoid::Agent Agent>
+struct std::hash<Agent> {
+  using IdType = Agent::id_type;
+  uint32_t operator()(abmoid::agent_t<IdType> agent) const noexcept {
+    return std::hash<IdType>{}(agent.get_id());
   }
 };
 

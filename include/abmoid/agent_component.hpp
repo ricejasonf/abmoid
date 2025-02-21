@@ -95,7 +95,6 @@ class agent_component<Value, Agent> {
   using lookup_storage = std::unordered_map<Agent, unsigned>;
   using index_t = unsigned;
 
-  value_storage values;
   agent_storage agents;
   lookup_storage lookup;
 
@@ -104,7 +103,6 @@ public:
   using iterator = agent_storage::const_iterator;
 
   void clear() {
-    values.clear();
     agents.clear();
     lookup.clear();
   }
@@ -115,7 +113,7 @@ public:
   iterator end() const { return agents.end(); }
   iterator end() { return agents.end(); }
   iterator erase(iterator itr) {
-    index_t index = std::distance(agents.begin(), itr);
+    index_t index = std::distance(std::cbegin(agents), itr);
     auto agent_itr = agents.begin() + index;
     auto lookup_itr = lookup.find(*itr);
     assert(agents.size() > index &&
@@ -134,7 +132,7 @@ public:
     // swapping with the last element so we can efficiently
     // remove the element without reindexing everything.
     using std::swap;
-    swap(*itr, agents.back());
+    swap(const_cast<Agent&>(*itr), agents.back());
     lookup[*itr] = index;
     agents.pop_back();
 
@@ -146,7 +144,7 @@ public:
     return lookup.contains(a);
   }
 
-  Value create(Agent a, Value)
+  Value create(Agent a, Value v = {}) {
     assert(!contains(a) && "only one component per entity is allowed");
     lookup[a] = agents.size();
     agents.push_back(a);
@@ -158,8 +156,8 @@ public:
     return agents[index];
   }
 
-  Agent get_agent(iterator itr) {
-    return get_agent(std::distance(values.begin(), itr));
+  Agent get_agent(iterator itr) const {
+    return *itr;
   }
 };
 
