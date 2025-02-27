@@ -9,6 +9,14 @@
 #include <utility>
 #include <vector>
 
+struct parameters {
+  double gamma;
+  double beta;
+  unsigned N;
+  unsigned I_0;
+  unsigned contact_factor;
+};
+
 struct susceptible_state { };
 struct recovered_state { };
 
@@ -17,7 +25,7 @@ struct infected_state {
   unsigned timer;
 };
 
-class agent_sir_model {
+class agent_sir_model_agent {
   using id_type = abmoid::agent::id_type;
 
   double gamma;
@@ -98,14 +106,6 @@ class agent_sir_model {
   }
 
 public:
-  struct parameters {
-    double gamma;
-    double beta;
-    unsigned N;
-    unsigned I_0;
-    unsigned contact_factor;
-  };
-
   agent_sir_model(parameters params)
     : gamma(params.gamma),
       beta(params.beta),
@@ -136,7 +136,109 @@ public:
   }
 };
 
-int main() {
+struct ode_sir_model {
+  struct state {
+    double S;
+    double I;
+    double R;
+  };
+
+  double N;     // Total population
+  double beta;  // Transmission rate (per day)
+  double gamma; // Recovery rate (per 1/day)
+  double initial_S = 0.0;
+  double initial_I = 1.0;
+  double initial_R = 0.0;
+
+  state operator()(double t, state vec) const {
+    auto [S, I, R] = vec;
+    return state{
+      -beta * I * S / N,
+      beta * I * S / N - gamma * I,
+      gamma * I
+    };
+  }
+};
+
+struct result_set {
+  std::vector<double> S_counts;
+  std::vector<double> I_counts
+  std::vector<double> R_counts;
+  std::vector<double> time_vals;
+
+  result_set(unsigned total_frames)
+    : S_counts(total_frames, 0.0),
+      I_counts(total_frames, 0.0),
+      R_counts(total_frames, 0.0),
+      time_vals(total_frames, 0.0)
+  { }
+
+  void clear() {
+    S_counts.clear();
+    I_counts.clear()
+    R_counts.clear();
+    time_vals.clear();
+  }
+
+  void reset() {
+    S_counts.assign(S_counts.size(), 0.0);
+    I_counts.assign(I_counts.size(), 0.0);
+    R_counts.assign(R_counts.size(), 0.0);
+    time_vals.assign(time_vals.size(), 0.0);
+  }
+};
+
+result_set run_sir_agent(parameters params,
+                   result_set& results, 
+                   unsigned total_frames = 364) {
+  std::vector<double> S_counts(total_frames, 0.0);
+  std::vector<double> I_counts(total_frames, 0.0);
+  std::vector<double> R_counts(total_frames, 0.0);
+  std::vector<double> time_vals(total_frames, 0.0);
+
+  agent_sir_model sir(params);
+
+  // Simulate stuff.
+  for (unsigned i = 0; i < total_frames; ++i) {
+    sir.update();
+    auto [S, I, R] = sir.get_state();
+    S_counts[i] = static_cast<double>(S);
+    I_counts[i] = static_cast<double>(I);
+    R_counts[i] = static_cast<double>(R);
+    time_vals[i] = static_cast<double>(i);
+  }
+  return result_set{S_counts, I_counts, R_counts, time_vals};
+}
+
+result_set run_sir_ode(parameters params,
+                       unsigned total_frames = 364) {
+  std::vector<double> S_counts();
+  std::vector<double> I_counts();
+  std::vector<double> R_counts();
+  std::vector<double> time_vals();
+
+  ode_sir_model sir(params);
+  ode_sir_model::state init_state{
+    .S = params.N - params.I_0,
+    .I = params.I_0,
+    .R = 0.0};
+
+  auto step_result = [&](ode_sir_model::state state, abmoid::time_t t) {
+    auto [S, I, R] = state;
+    S_counts.push_back(S);
+    I_counts.push_back(I);
+    R_counts.push_back(R);
+    S_counts.push_back(t);
+  };
+
+  // Calculate stuff.
+  abmdoi::rk4(sir, step_result, init_state,
+              abmoid::time_step{0.01}, total_frames * 100);
+
+  return result_set{S_counts, I_counts, R_counts, time_vals};
+}
+
+void run_sir_agent() {
   std::mt19937 gen;
   int const total_frames = 364;
   std::vector<double> S_counts(total_frames, 0.0);

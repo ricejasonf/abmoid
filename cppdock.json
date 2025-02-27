@@ -5,7 +5,6 @@
   "platforms": {
     "develop": {
       "type": "linux_x64",
-      "base_image": "ricejasonf/parmexpr",
       "deps": [
         [
           {
