@@ -7,28 +7,28 @@
 namespace abmoid {
 using time_t = double;
 
-template <typename F, std::SemiRegular State>
+template <typename F, typename State>
 concept SystemFn = std::invocable<F, State, State&, time_t>;
 
-template <typename F, std::SemiRegular State>
+template <typename F, typename State>
 concept ResultVisitorFn = std::invocable<F, State, time_t>;
+
+// TODO State needs to be a "vector".
 
 struct time_step {
   double value;
 };
 
 template <typename SystemFn,
-          std::SemiRegular State,
-          ResultVisitorFn ResultVisitorFn>
+          std::semiregular State,
+          ResultVisitorFn<State> ResultVisitorFn>
 void rk4(SystemFn&& fn, ResultVisitorFn&& result, State initial_state,
          time_step dt_, std::size_t step_count) {
   if (step_count < 1)
-    return {};
+    return;
 
-  using Value = typename integrator_output<dim>::value_type;
-  auto output = integrator_output<dim>(step_count);
   auto dt = dt_.value;
-  State prev_val = init.value;
+  State prev_val = initial_state;
   auto t = 0;
   for (int i = 0; i < step_count; ++i) {
     State const& x = prev_val;

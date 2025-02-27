@@ -1,5 +1,6 @@
 #include <abmoid/agent.hpp>
 #include <abmoid/agent_component.hpp>
+#include <abmoid/rk4.hpp>
 
 #include <matplot/matplot.h>
 #include <algorithm>
@@ -25,7 +26,7 @@ struct infected_state {
   unsigned timer;
 };
 
-class agent_sir_model_agent {
+class agent_sir_model {
   using id_type = abmoid::agent::id_type;
 
   double gamma;
@@ -141,14 +142,18 @@ struct ode_sir_model {
     double S;
     double I;
     double R;
+
+    state operator+(state const& other) const {
+      return state{.S = S + other.S,
+                   .I = I * other.I,
+                   .R = R * other.R};
+    }
+
   };
 
   double N;     // Total population
   double beta;  // Transmission rate (per day)
   double gamma; // Recovery rate (per 1/day)
-  double initial_S = 0.0;
-  double initial_I = 1.0;
-  double initial_R = 0.0;
 
   state operator()(double t, state vec) const {
     auto [S, I, R] = vec;
@@ -160,37 +165,25 @@ struct ode_sir_model {
   }
 };
 
+ode_sir_model::state operator*(double k, ode_sir_model::state const& self) {
+  return {.S = self.S * k,
+          .I = self.I * k,
+          .R = self.R * k};
+}
+
+ode_sir_model::state operator*(ode_sir_model::state const& self, double k) {
+  return k * self;
+}
+
 struct result_set {
   std::vector<double> S_counts;
-  std::vector<double> I_counts
+  std::vector<double> I_counts;
   std::vector<double> R_counts;
   std::vector<double> time_vals;
-
-  result_set(unsigned total_frames)
-    : S_counts(total_frames, 0.0),
-      I_counts(total_frames, 0.0),
-      R_counts(total_frames, 0.0),
-      time_vals(total_frames, 0.0)
-  { }
-
-  void clear() {
-    S_counts.clear();
-    I_counts.clear()
-    R_counts.clear();
-    time_vals.clear();
-  }
-
-  void reset() {
-    S_counts.assign(S_counts.size(), 0.0);
-    I_counts.assign(I_counts.size(), 0.0);
-    R_counts.assign(R_counts.size(), 0.0);
-    time_vals.assign(time_vals.size(), 0.0);
-  }
 };
 
 result_set run_sir_agent(parameters params,
-                   result_set& results, 
-                   unsigned total_frames = 364) {
+                         unsigned total_frames = 364) {
   std::vector<double> S_counts(total_frames, 0.0);
   std::vector<double> I_counts(total_frames, 0.0);
   std::vector<double> R_counts(total_frames, 0.0);
@@ -212,15 +205,20 @@ result_set run_sir_agent(parameters params,
 
 result_set run_sir_ode(parameters params,
                        unsigned total_frames = 364) {
-  std::vector<double> S_counts();
-  std::vector<double> I_counts();
-  std::vector<double> R_counts();
-  std::vector<double> time_vals();
+  std::vector<double> S_counts;
+  std::vector<double> I_counts;
+  std::vector<double> R_counts;
+  std::vector<double> time_vals;
 
-  ode_sir_model sir(params);
+  double N    = static_cast<double>(params.N);
+  double I_0  = static_cast<double>(params.I_0);
+
+  ode_sir_model sir{.N      = static_cast<double>(N),
+                    .beta   = params.beta,
+                    .gamma  = params.gamma};
   ode_sir_model::state init_state{
-    .S = params.N - params.I_0,
-    .I = params.I_0,
+    .S = N - I_0,
+    .I = I_0,
     .R = 0.0};
 
   auto step_result = [&](ode_sir_model::state state, abmoid::time_t t) {
@@ -232,24 +230,22 @@ result_set run_sir_ode(parameters params,
   };
 
   // Calculate stuff.
-  abmdoi::rk4(sir, step_result, init_state,
+  abmoid::rk4(sir, step_result, init_state,
               abmoid::time_step{0.01}, total_frames * 100);
 
   return result_set{S_counts, I_counts, R_counts, time_vals};
 }
 
-void run_sir_agent() {
-  std::mt19937 gen;
+void main() {
   int const total_frames = 364;
-  std::vector<double> S_counts(total_frames, 0.0);
-  std::vector<double> I_counts(total_frames, 0.0);
-  std::vector<double> R_counts(total_frames, 0.0);
+  parameters params{.gamma  = 0.10,
+                    .beta   = 0.24,
+                    .N      = 10'000,
+                    .I_0    = 10,
+                    .contact_factor = 1};
 
-  agent_sir_model sir({.gamma = 0.10,
-                       .beta = 0.24,
-                       .N = 10'000,
-                       .I_0 = 10,
-                       .contact_factor = 1});
+  result_set agent_results = run_sir_agent(params, total_frames);
+  result_set agent_result = run_sir_ode(params, total_frames);
 
   // Simulate stuff.
   for (unsigned i = 0; i < total_frames; ++i) {
