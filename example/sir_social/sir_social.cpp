@@ -38,6 +38,12 @@ struct social_group_component {
   // we randomly inspect for infection
   unsigned contact_factor;
   abmoid::agent_component component<social_group_connection>;
+
+  social_group_component(social_group sg)
+    : infected_count(sg.I_0),
+      beta(sg.beta),
+      contact_factor(sg.contact_factor)
+  { }
 };
 
 class agent_sir_model {
@@ -54,11 +60,36 @@ class agent_sir_model {
   abmoid::agent_component<recovered_state> R;
   std::array<social_group_component, 2> social_groups;
 
-  void init(unsigned I_0) {
-    for (abmoid::agent agent : std::views::take(N, I_0))
-      assign_I(agent);
-    for (abmoid::agent agent : std::views::drop(N, I_0))
+
+  template <typename SocialGroupParams>
+  void init(SocialGroupParams&& sg_params) {
+    // Create the social group components.
+    for (auto& sg : social_groups) {
+      social_groups.push_back(social_group_component{
+        .infected_count = sg_params.infected_count,
+        .beta           = sg_params.beta,
+        .contact_factor = sg_params.contact_factor});
+    }
+
+    // Track agents that are unassigned to SIR state.
+    auto remaining_pop = std::views::drop(N, 0);
+
+    // Add the infecteds to the social groups.
+    for (social_group_component& sg : social_groups) {
+      for (abmoid::agent agent : std::views::take(remaining_pop,
+                                                  sg.infected_count)) {
+        assign_I(agent);
+        assign_to_group(sg, agent);
+      }
+      remaining_pop = std::views::drop(remaining_pop, sg.infected_count);
+    }
+
+    // Assign all that remains the susceptible state.
+    for (abmoid::agent agent : remaining_pop)
       S.create(agent);
+
+    // Calculate intersection
+    // 
   }
 
   double gen_uniform_random() {
@@ -94,10 +125,11 @@ class agent_sir_model {
       bool is_infected = false;
       for (social_group_component& group : social_groups) {
         if (group.contains(*itr)) {
-          double probability = group.beta *
-                               static_cast<double>(group.infected_count) /
-                               static_cast<double>(group.component.size());
-          if (gen_uniform_random() < probability) {
+          double I_over_N = static_cast<double>(group.infected_count) /
+                            static_cast<double>(group.component.size());
+
+          double sink_rate_of_S = group.beta * I_over_N;
+          if (gen_uniform_random() < sink_rate_of_S) {
             is_infected = true;
             break;
           }
@@ -137,7 +169,8 @@ public:
                   std::initializer_list<social_group> social_group_params)
     : gamma(params.gamma),
       gen(),
-      N(params.N)
+      N(params.N),
+      social_groups(std::from_range, social_group_params)
   {
     for (social_group&& s : social_group_params)
       init_social_group(s);

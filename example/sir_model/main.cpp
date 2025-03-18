@@ -110,7 +110,7 @@ public:
   agent_sir_model(parameters params)
     : gamma(params.gamma),
       beta(params.beta),
-      beta_star(params.beta * params.contact_factor),
+      beta_star(params.beta / params.contact_factor),
       contact_factor(params.contact_factor),
       gen(),
       N(params.N)
@@ -236,29 +236,12 @@ result_set run_sir_ode(parameters params,
   return result_set{S_counts, I_counts, R_counts, time_vals};
 }
 
-void main() {
-  int const total_frames = 364;
-  parameters params{.gamma  = 0.10,
-                    .beta   = 0.24,
-                    .N      = 10'000,
-                    .I_0    = 10,
-                    .contact_factor = 1};
-
-  result_set agent_results = run_sir_agent(params, total_frames);
-  result_set agent_result = run_sir_ode(params, total_frames);
-
-  // Simulate stuff.
-  for (unsigned i = 0; i < total_frames; ++i) {
-    sir.update();
-    auto [S, I, R] = sir.get_state();
-    S_counts[i] = static_cast<double>(S);
-    I_counts[i] = static_cast<double>(I);
-    R_counts[i] = static_cast<double>(R);
-  }
-
+void plot_results(result_set results, std::string title,
+                                      std::string filename) {
+  auto& [S_counts, I_counts, R_counts, time_vals] = results;
   // Plot stuff.
   auto figure = matplot::figure(true);
-  matplot::title("Agent Based SIR Model");
+  matplot::title(title);
   matplot::legend(matplot::on);
   matplot::hold(matplot::on);
 
@@ -275,6 +258,21 @@ void main() {
   plot3->line_width(2);
   plot3->display_name("R");
 
-  matplot::save("img/b_plot.png");
+  matplot::save(filename);
   matplot::hold(matplot::off);
+}
+
+int main() {
+  int const total_frames = 364;
+  parameters params{.gamma  = 0.10,
+                    .beta   = 0.24,
+                    .N      = 10'000,
+                    .I_0    = 10,
+                    .contact_factor = 3};
+
+  result_set agent_results = run_sir_agent(params, total_frames);
+  //result_set ode_results = run_sir_ode(params, total_frames);
+
+  plot_results(agent_results, "Agent Based", "img/agent_based.png");
+  //plot_results(ode_results, "ODE Based", "img/ode_based.png");
 }
