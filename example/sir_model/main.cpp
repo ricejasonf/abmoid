@@ -18,7 +18,10 @@ struct parameters {
   unsigned contact_factor;
 };
 
-struct susceptible_state { };
+struct susceptible_state {
+  // Frames until infected;
+  unsigned timer = 0;
+};
 struct recovered_state { };
 
 struct infected_state {
@@ -44,7 +47,7 @@ class agent_sir_model {
       assign_I(agent);
     
     for (abmoid::agent agent : std::views::drop(N, I_0))
-      S.create(agent);
+      S.create(agent, susceptible_state{0});
   }
 
   double gen_uniform_random() {
@@ -68,22 +71,30 @@ class agent_sir_model {
   void update_S() {
     // Iterate susceptibles and possibly make sick.
     for (auto itr = S.begin(); itr != S.end();) {
-      // Choose 3 randos and check for infectedness.
-      bool is_infected = false;
-      for (unsigned i = 0; i < contact_factor; ++i) {
-        abmoid::agent e = N.select_random(gen);
-        if (I.contains(e) && gen_uniform_random() < beta_star) {
-          is_infected = true;
-          break;
-        }
-      }
-      if (is_infected) {
+      susceptible_state s = *itr;
+      if (s.timer == 1) {
         // Create random duration based on exponential distribution.
         assign_I(S.get_agent(itr));
         itr = S.erase(itr);
+        continue;
+      } else if (s.timer > 1) {
+        --s.timer;
       } else {
-          ++itr;
+        // Roll the dice and maybe get contact.
+        double I_over_N = static_cast<double>(I.size()) /
+                          static_cast<double>(N.size());
+        if (gen_uniform_random() < I_over_N) {
+          double rand = std::exponential_distribution<>(beta_star)(gen);
+          s.timer = static_cast<unsigned>(std::round(rand));
+          if (s.timer == 0) {
+            assign_I(S.get_agent(itr));
+            itr = S.erase(itr);
+            continue;
+          }
+        }
       }
+
+      ++itr;
     }
   }
 
@@ -110,7 +121,7 @@ public:
   agent_sir_model(parameters params)
     : gamma(params.gamma),
       beta(params.beta),
-      beta_star(params.beta / params.contact_factor),
+      beta_star(params.beta * params.contact_factor),
       contact_factor(params.contact_factor),
       gen(),
       N(params.N)
@@ -268,7 +279,7 @@ int main() {
                     .beta   = 0.24,
                     .N      = 10'000,
                     .I_0    = 10,
-                    .contact_factor = 3};
+                    .contact_factor = 1};
 
   result_set agent_results = run_sir_agent(params, total_frames);
   //result_set ode_results = run_sir_ode(params, total_frames);
