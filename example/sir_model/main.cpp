@@ -156,8 +156,8 @@ struct ode_sir_model {
 
     state operator+(state const& other) const {
       return state{.S = S + other.S,
-                   .I = I * other.I,
-                   .R = R * other.R};
+                   .I = I + other.I,
+                   .R = R + other.R};
     }
 
   };
@@ -177,9 +177,9 @@ struct ode_sir_model {
 };
 
 ode_sir_model::state operator*(double k, ode_sir_model::state const& self) {
-  return {.S = self.S * k,
-          .I = self.I * k,
-          .R = self.R * k};
+  return {.S = k * self.S,
+          .I = k * self.I,
+          .R = k * self.R};
 }
 
 ode_sir_model::state operator*(ode_sir_model::state const& self, double k) {
@@ -237,7 +237,7 @@ result_set run_sir_ode(parameters params,
     S_counts.push_back(S);
     I_counts.push_back(I);
     R_counts.push_back(R);
-    S_counts.push_back(t);
+    time_vals.push_back(t);
   };
 
   // Calculate stuff.
@@ -279,11 +279,11 @@ int main() {
                     .beta   = 0.24,
                     .N      = 10'000,
                     .I_0    = 10,
-                    .contact_factor = 1};
+                    .contact_factor = 2};
 
   result_set agent_results = run_sir_agent(params, total_frames);
-  //result_set ode_results = run_sir_ode(params, total_frames);
+  result_set ode_results = run_sir_ode(params, total_frames);
 
   plot_results(agent_results, "Agent Based", "img/agent_based.png");
-  //plot_results(ode_results, "ODE Based", "img/ode_based.png");
+  plot_results(ode_results, "ODE Based", "img/ode_based.png");
 }
