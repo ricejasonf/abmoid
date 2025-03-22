@@ -2,13 +2,10 @@
 #include <abmoid/agent_component.hpp>
 #include <abmoid/rk4.hpp>
 
-#include <matplot/matplot.h>
-#include <algorithm>
-#include <cassert>
+#include <iostream>
 #include <random>
 #include <ranges>
 #include <utility>
-#include <vector>
 
 struct parameters {
   double gamma;
@@ -31,6 +28,7 @@ struct infected_state {
 
 class agent_sir_model {
   using id_type = abmoid::agent::id_type;
+  using seed_type = std::mt19937::result_type;
 
   double gamma;
   double beta;
@@ -118,12 +116,13 @@ class agent_sir_model {
   }
 
 public:
-  agent_sir_model(parameters params)
+  agent_sir_model(parameters params,
+        seed_type seed = std::mt19937::default_seed)
     : gamma(params.gamma),
       beta(params.beta),
       beta_star(params.beta * params.contact_factor),
       contact_factor(params.contact_factor),
-      gen(),
+      gen(seed),
       N(params.N)
   {
     init(params.I_0);
@@ -186,41 +185,20 @@ ode_sir_model::state operator*(ode_sir_model::state const& self, double k) {
   return k * self;
 }
 
-struct result_set {
-  std::vector<double> S_counts;
-  std::vector<double> I_counts;
-  std::vector<double> R_counts;
-  std::vector<double> time_vals;
-};
-
-result_set run_sir_agent(parameters params,
-                         unsigned total_frames = 364) {
-  std::vector<double> S_counts(total_frames, 0.0);
-  std::vector<double> I_counts(total_frames, 0.0);
-  std::vector<double> R_counts(total_frames, 0.0);
-  std::vector<double> time_vals(total_frames, 0.0);
-
+template <typename HandleFn>
+void run_sir_agent(parameters params, unsigned total_frames, HandleFn handle) {
   agent_sir_model sir(params);
 
   // Simulate stuff.
   for (unsigned i = 0; i < total_frames; ++i) {
     sir.update();
     auto [S, I, R] = sir.get_state();
-    S_counts[i] = static_cast<double>(S);
-    I_counts[i] = static_cast<double>(I);
-    R_counts[i] = static_cast<double>(R);
-    time_vals[i] = static_cast<double>(i);
+    handle(S, I, R, i);
   }
-  return result_set{S_counts, I_counts, R_counts, time_vals};
 }
 
-result_set run_sir_ode(parameters params,
-                       unsigned total_frames = 364) {
-  std::vector<double> S_counts;
-  std::vector<double> I_counts;
-  std::vector<double> R_counts;
-  std::vector<double> time_vals;
-
+template <typename HandleFn>
+void run_sir_ode(parameters params, unsigned total_frames, HandleFn handle) {
   double N    = static_cast<double>(params.N);
   double I_0  = static_cast<double>(params.I_0);
 
@@ -234,43 +212,12 @@ result_set run_sir_ode(parameters params,
 
   auto step_result = [&](ode_sir_model::state state, abmoid::time_t t) {
     auto [S, I, R] = state;
-    S_counts.push_back(S);
-    I_counts.push_back(I);
-    R_counts.push_back(R);
-    time_vals.push_back(t);
+    handle(S, I, R, t);
   };
 
   // Calculate stuff.
   abmoid::rk4(sir, step_result, init_state,
               abmoid::time_step{0.01}, total_frames * 100);
-
-  return result_set{S_counts, I_counts, R_counts, time_vals};
-}
-
-void plot_results(result_set results, std::string title,
-                                      std::string filename) {
-  auto& [S_counts, I_counts, R_counts, time_vals] = results;
-  // Plot stuff.
-  auto figure = matplot::figure(true);
-  matplot::title(title);
-  matplot::legend(matplot::on);
-  matplot::hold(matplot::on);
-
-
-  auto plot1 = matplot::plot(S_counts);
-  plot1->line_width(2);
-  plot1->display_name("S");
-
-  auto plot2 = matplot::plot(I_counts);
-  plot2->line_width(2);
-  plot2->display_name("I");
-
-  auto plot3 = matplot::plot(R_counts);
-  plot3->line_width(2);
-  plot3->display_name("R");
-
-  matplot::save(filename);
-  matplot::hold(matplot::off);
 }
 
 int main() {
@@ -281,9 +228,11 @@ int main() {
                     .I_0    = 10,
                     .contact_factor = 2};
 
-  result_set agent_results = run_sir_agent(params, total_frames);
-  result_set ode_results = run_sir_ode(params, total_frames);
+  auto print_csv_row = [](unsigned S, unsigned I, unsigned R, unsigned t) {
+    std::cout << S << ',' << I << ',' << R << ',' << t << '\n';
+  };
 
-  plot_results(agent_results, "Agent Based", "img/agent_based.png");
-  plot_results(ode_results, "ODE Based", "img/ode_based.png");
+  run_sir_ode(params, total_frames, print_csv_row);
+
+  run_sir_agent(params, total_frames, print_csv_row);
 }
