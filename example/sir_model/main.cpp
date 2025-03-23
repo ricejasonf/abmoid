@@ -186,8 +186,9 @@ ode_sir_model::state operator*(ode_sir_model::state const& self, double k) {
 }
 
 template <typename HandleFn>
-void run_sir_agent(parameters params, unsigned total_frames, HandleFn handle) {
-  agent_sir_model sir(params);
+void run_sir_agent(unsigned seed, parameters params, unsigned total_frames,
+                   HandleFn handle) {
+  agent_sir_model sir(params, seed);
 
   // Simulate stuff.
   for (unsigned i = 0; i < total_frames; ++i) {
@@ -229,10 +230,15 @@ int main() {
                     .contact_factor = 2};
 
   auto print_csv_row = [](unsigned S, unsigned I, unsigned R, unsigned t) {
-    std::cout << S << ',' << I << ',' << R << ',' << t << '\n';
+    std::cout << S << ',' << I << ',' << R << '\n';
   };
+
+  auto begin_new_dataset = [] { std::cout << "\n\n"; };
 
   run_sir_ode(params, total_frames, print_csv_row);
 
-  run_sir_agent(params, total_frames, print_csv_row);
+  for (int i = 0; i < 100; i++) {
+    begin_new_dataset();
+    run_sir_agent(i, params, total_frames, print_csv_row);
+  }
 }
