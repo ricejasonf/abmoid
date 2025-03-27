@@ -8,52 +8,94 @@
 #include <utility>
 #include <vector>
 
+// Simulation wide params
 struct parameters {
   double gamma;
   unsigned N;
 };
 
-struct social_group {
-  std::string name;
+struct social_group_params {
+  std::string name; // not currently used
   double beta;
   unsigned N;
   unsigned I_0;
   unsigned contact_factor;
 };
 
-struct susceptible_state { };
+// People as agents
+struct person_tag { };
+using person = abmoid::agent_t<person_tag>;
+
+// Social groups as agents
+struct social_group_tag { };
+using social_group = abmoid::agent_t<social_group_tag>;
+
+struct susceptible_state {
+  // Frames until infected;
+  unsigned timer = 0;
+};
 struct recovered_state { };
-struct social_group_connection { };
 
 struct infected_state {
   // Frames until recovered.
   unsigned timer;
 };
 
-struct social_group_component {
-  unsigned infected_count;
-  // Rate of infection
-  double beta;
-  // Number of adjacent agents within this group that
-  // we randomly inspect for infection
-  unsigned contact_factor;
-  abmoid::agent_component component<social_group_connection>;
+// Track social group connections and relevant
+// simulation data.
+class social_group_connections {
+  // Cache counts and store simulation data needed
+  // for each social group when updating susceptible
+  // population.
+  struct group_data {
+    unsigned I_count = 0;
+    unsigned N_count = 0;
+    double beta_star;
 
-  social_group_component(social_group sg)
-    : infected_count(sg.I_0),
-      beta(sg.beta),
-      contact_factor(sg.contact_factor)
-  { }
+    group_data(double beta_star)
+      : beta_star(beta_star)
+    { }
+  };
+
+  abmoid::agent_component<group_data, social_group> groups;
+  std::unordered_set<std::pair<person, social_group>> connections;
+
+public;
+  void init_group(social_group g, social_group_params const& params) {
+    double beta_star = params.beta * param.contact_factor;
+    groups.create(g, group_data(beta_star));
+  }
+
+  void add(person p, social_group g, bool is_infected) {
+    // Add an entry to the set.
+    auto [itr, did_insert] = connections.insert({p, g});
+    assert(did_insert && "should add connection only once");
+
+    // TODO lookup component by agent.
+    group_data& group = groups.get_agent(g);
+
+    // Increment N_count if connection did not exist.
+    ++group.N_count;
+
+    // Increment infected_count if infected.
+    if (is_infected)
+      ++group.I_count;
+  }
+
+  // For a person changing infected state, update
+  // the groups counts for each group.
+  void update(person p, bool is_infected) {
+    for (auto itr = groups.begin(); itr != groups.end();) {
+
+    // TODO
+  }
 };
 
 class agent_sir_model {
   using id_type = abmoid::agent::id_type;
 
   double gamma;
-  double beta;
-  double beta_star;
   abmoid::population N;
-  unsigned contact_factor;
   std::mt19937 gen;
   abmoid::agent_component<susceptible_state> S;
   abmoid::agent_component<infected_state> I;
@@ -122,26 +164,34 @@ class agent_sir_model {
       // Count the number of nodes connected to this susceptible agent.
       unsigned total_count = 0;
       unsigned infected_count = 0;
-      bool is_infected = false;
-      for (social_group_component& group : social_groups) {
-        if (group.contains(*itr)) {
-          double I_over_N = static_cast<double>(group.infected_count) /
-                            static_cast<double>(group.component.size());
-
-          double sink_rate_of_S = group.beta * I_over_N;
-          if (gen_uniform_random() < sink_rate_of_S) {
-            is_infected = true;
-            break;
+      susceptible_state s = *itr;
+      if (s.timer == 1) {
+        assign_I(S.get_agent(itr));
+        itr = S.erase(itr);
+        continue;
+      } else if (s.timer > 1) {
+        --s.timer;
+      } else {
+        for (social_group& g : social_groups) {
+          if (connections.contains({s, g})) {
+            social_group_sim_data group = connections.group_data.get_agent(g);
+            double I_over_N = static_cast<double>(group.I) /
+                              static_cast<double>(group.N);
+    
+            if (gen_uniform_random() < I_over_N) {
+              double rand =
+                std::exponential_distribution<>(group.beta_star)(gen);
+              s.timer = static_cast<unsigned>(std::round(rand));
+              if (s.timer == 0) {
+                assign_I(S.get_agent(itr));
+                itr = S.erase(itr);
+                break;
+              }
+            }
           }
         }
       }
-      if (is_infected) {
-        // Create random duration based on exponential distribution.
-        assign_I(S.get_agent(itr));
-        itr = S.erase(itr);
-      } else {
-          ++itr;
-      }
+      ++itr;
     }
   }
 

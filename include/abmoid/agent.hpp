@@ -11,10 +11,10 @@ namespace abmoid {
 template <typename Agent>
 class population_t;
 
-template <typename IdType>
+template <typename TagType, typename IdType = uint_fast32_t>
 class agent_t {
 protected:
-  friend class population_t<agent_t<IdType>>;
+  friend class population_t<agent_t<TagType, IdType>>;
   IdType id;
 
   explicit agent_t(IdType id)
@@ -22,7 +22,8 @@ protected:
   { }
 
 public:
-  using id_type = uint_fast32_t;
+  using tag_type = TagType;
+  using id_type = IdType;
 
   agent_t() = default;
 
@@ -37,17 +38,18 @@ public:
   bool operator==(agent_t const&) const = default;
 };
 
-class agent : public agent_t<uint_fast32_t>
+class agent : public agent_t<void>
 {
   friend class population_t<agent>;
-  agent(uint_fast32_t id)
-    : agent_t<uint_fast32_t>(id)
+  agent(id_type id)
+    : agent_t<void>(id)
   { }
 };
 
 template <typename X>
 concept Agent = requires(X x) {
-  ([]<typename IdType>(agent_t<IdType> const&) { })(x);
+  ([]<typename IdType, typename TagType>
+    (agent_t<TagType, IdType> const&) { })(x);
 };
 
 template <typename Agent>
@@ -157,7 +159,6 @@ public:
   }
 };
 
-
 using population = population_t<agent>;
 
 static_assert(std::ranges::random_access_range<population>);
@@ -167,7 +168,8 @@ static_assert(std::ranges::random_access_range<population>);
 template <abmoid::Agent Agent>
 struct std::hash<Agent> {
   using IdType = Agent::id_type;
-  uint32_t operator()(abmoid::agent_t<IdType> agent) const noexcept {
+  using TagType = Agent::tag_type;
+  uint32_t operator()(abmoid::agent_t<TagType, IdType> agent) const noexcept {
     return std::hash<IdType>{}(agent.get_id());
   }
 };
