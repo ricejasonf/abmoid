@@ -67,6 +67,17 @@ public:
     return lookup.contains(a);
   }
 
+  iterator find(Agent a) const {
+    auto lookup_itr = lookup.find(a);
+    if (lookup_itr == lookup.end())
+      return values.end();
+
+    unsigned pos = *lookup.second;
+
+    assert(values.size() < pos);
+    return values.begin() + pos;
+  }
+
   template <typename V>
   Value& create(Agent a, V&& value) {
     assert(!contains(a) && "only one component per entity is allowed");

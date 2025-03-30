@@ -10,16 +10,19 @@
 
 // Simulation wide params
 struct parameters {
-  double gamma;
-  unsigned N;
+  double gamma; // rate recovery
 };
 
 struct social_group_params {
-  std::string name; // not currently used
-  double beta;
+  std::string_view name;
+  double beta; // rate of infection
+  unsigned contact_factor;
+};
+
+struct connection_spec {
+  std::vector<std::string_view> groups,
   unsigned N;
   unsigned I_0;
-  unsigned contact_factor;
 };
 
 // People as agents
@@ -58,12 +61,24 @@ class social_group_connections {
   };
 
   abmoid::agent_component<group_data, social_group> groups;
-  std::unordered_set<std::pair<person, social_group>> connections;
+  std::unordered_set<person, social_group> connections;
+  std::unordered_set<std::string_view, social_group> name_lookup;
+
+  group_data& get_group_data(social_group g) const {
+    auto group_itr = groups.find(g);
+    assert(group_itr != groups.end());
+    return *group_itr;
+  }
 
 public;
   void init_group(social_group g, social_group_params const& params) {
+    name_lookup[params.name] = g;
     double beta_star = params.beta * param.contact_factor;
     groups.create(g, group_data(beta_star));
+  }
+
+  social_group get(std::string_view name) const {
+    return name_lookup[name];
   }
 
   void add(person p, social_group g, bool is_infected) {
@@ -71,8 +86,8 @@ public;
     auto [itr, did_insert] = connections.insert({p, g});
     assert(did_insert && "should add connection only once");
 
-    // TODO lookup component by agent.
-    group_data& group = groups.get_agent(g);
+    // Get the group data associated with the group agent.
+    group_data& group = get_group_data(g);
 
     // Increment N_count if connection did not exist.
     ++group.N_count;
@@ -82,86 +97,66 @@ public;
       ++group.I_count;
   }
 
+  void add(person p, std::string_view group_name, bool is_infected) {
+    return add(p, get(group_name), is_infected);
+  }
+
   // For a person changing infected state, update
   // the groups counts for each group.
+  // We assume `is_infected` is not the same as
+  // the current state.
   void update(person p, bool is_infected) {
     for (auto itr = groups.begin(); itr != groups.end();) {
-
-    // TODO
+      if (connections.contains(p)) {
+        group_data& group = *itr;
+        if (is_infected)
+          ++group.I_count;
+        else
+          --group.I_count;
+      }
+    }
   }
 };
 
 class agent_sir_model {
-  using id_type = abmoid::agent::id_type;
-
   double gamma;
-  abmoid::population N;
+  abmoid::population<person> N;
+  abmoid::population<social_group> social_groups;
   std::mt19937 gen;
   abmoid::agent_component<susceptible_state> S;
   abmoid::agent_component<infected_state> I;
   abmoid::agent_component<recovered_state> R;
-  std::array<social_group_component, 2> social_groups;
+  social_group_connections connections;
 
 
   template <typename SocialGroupParams>
   void init(SocialGroupParams&& sg_params) {
-    // Create the social group components.
-    for (auto& sg : social_groups) {
-      social_groups.push_back(social_group_component{
-        .infected_count = sg_params.infected_count,
-        .beta           = sg_params.beta,
-        .contact_factor = sg_params.contact_factor});
-    }
 
-    // Track agents that are unassigned to SIR state.
-    auto remaining_pop = std::views::drop(N, 0);
-
-    // Add the infecteds to the social groups.
-    for (social_group_component& sg : social_groups) {
-      for (abmoid::agent agent : std::views::take(remaining_pop,
-                                                  sg.infected_count)) {
-        assign_I(agent);
-        assign_to_group(sg, agent);
-      }
-      remaining_pop = std::views::drop(remaining_pop, sg.infected_count);
-    }
-
-    // Assign all that remains the susceptible state.
-    for (abmoid::agent agent : remaining_pop)
-      S.create(agent);
-
-    // Calculate intersection
-    // 
   }
 
   double gen_uniform_random() {
     return std::uniform_real_distribution<double>()(gen);
   }
 
-  void assign_I(abmoid::agent a) {
+  void assign_I(person a) {
     double rand = std::exponential_distribution<>(gamma)(gen);
     unsigned initial_timer = static_cast<unsigned>(std::round(rand));
 
     I.create(a, infected_state{initial_timer});
   }
 
-  bool is_valid() const {
-    // TODO Check that the intersection
-    //      of sets of agents in each set is empty.
-    // The SIR states are mutually exclusive.
-    return N.size() == S.size() + I.size() + R.size();
-  }
-
   void update_S() {
+    //TODO update logic here
+
     // Count the infecteds in each social group up front.
-    for (abmoid::agent infected : infecteds)
+    for (person infected : infecteds)
       for (social_group_component& group : social_groups)
         if (group.component.contains(infected)
           ++group.infected_count;
 
     // Iterate susceptibles and possibly make sick.
     for (auto itr = S.begin(); itr != S.end();) {
-      // Count the number of nodes connected to this susceptible agent.
+      // Count the number of nodes connected to this susceptible person.
       unsigned total_count = 0;
       unsigned infected_count = 0;
       susceptible_state s = *itr;
@@ -177,7 +172,7 @@ class agent_sir_model {
             social_group_sim_data group = connections.group_data.get_agent(g);
             double I_over_N = static_cast<double>(group.I) /
                               static_cast<double>(group.N);
-    
+
             if (gen_uniform_random() < I_over_N) {
               double rand =
                 std::exponential_distribution<>(group.beta_star)(gen);
@@ -200,8 +195,8 @@ class agent_sir_model {
     for (auto itr = I.begin(); itr != I.end();) {
       infected_state& state = *itr;
       if (state.timer == 0) {
-        abmoid::agent agent = I.get_agent(itr);
-        R.create(agent);
+        person p = I.get_agent(itr);
+        R.create(p);
         I.erase(itr);
       } else {
         state.timer -= 1;
@@ -216,14 +211,26 @@ class agent_sir_model {
 
 public:
   agent_sir_model(parameters params,
-                  std::initializer_list<social_group> social_group_params)
+                  std::vector<social_group_params> sg_params,
+                  std::vector<connection_spec> conn_specs)
     : gamma(params.gamma),
       gen(),
-      N(params.N),
-      social_groups(std::from_range, social_group_params)
+      people(0),
+      social_groups(sg_params.size())
   {
-    for (social_group&& s : social_group_params)
-      init_social_group(s);
+    for (auto const& [g, params] : std::ranges::zip(social_groups, sg_params))
+      init_group(g, sg_params);
+
+    for (connection_spec const& conn_spec : conn_specs) {
+        for (unsigned i = 0; i < conn_spec.N; ++i)
+          for (std::string_view group_name : conn_spec.names)
+            connections.add(people.push_back(), group_name,
+                /*is_infected=*/false);
+        for (unsigned i = 0; i < conn_spec.I_0; ++i)
+          for (std::string_view group_name : conn_spec.names)
+            connections.add(people.push_back(), group_name,
+                /*is_infected=*/true);
+    }
   }
 
   void reset(unsigned I_0) {
@@ -249,24 +256,38 @@ void main() {
   agent_sir_model sir(
     parameters{
       .gamma  = 0.10,
-      .N      = 10'000
     },
     {
-      social_group{
-        .name = "A",
-        .N = 5'010,
+      group_params{
+        .name= "A",
         .beta = 0.24,
-        .I_0 = 10,
         .contact_factor = 3
       },
-      social_group{
-       .name = "B",
-       .N = 5'000,
-       .beta = 0.24,
-       .I_0 = 0,
-       .contact_factor = 3
+      group_params{
+        .name= "B",
+        .beta = 0.24,
+        .contact_factor = 3
       }
+    },
+    {
+      connection_spec{
+        .groups = {"A"},
+        .N = 7'490,
+        .I_0 = 10
+      },
+      connection_spec{
+       .groups = {"B"},
+       .N = 2'490,
+       .I_0 = 0
+      },
+      connection_spec{
+       .groups = {"A", "B"},
+       .N = 10,
+       .I_0 = 0
+      },
     });
+
+  // TODO count connections.
 
   int const total_frames = 364;
 

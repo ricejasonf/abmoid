@@ -141,6 +141,10 @@ public:
 
   static_assert(std::random_access_iterator<iterator>);
 
+  Agent push_back() {
+    return Agent{++N};
+  }
+
   id_type size() const {
     return N;
   }
