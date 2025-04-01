@@ -169,13 +169,39 @@ static_assert(std::ranges::random_access_range<population>);
 
 }
 
+namespace abmoid::detail {
+// Excerpt from boost with the same license
+// and the following copyright
+// Copyright 2005-2009 Daniel James.
+template <class T>
+void hash_combine(std::size_t& seed, T const& v) {
+  std::hash<T> hasher;
+  seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+}
+
 template <abmoid::Agent Agent>
 struct std::hash<Agent> {
   using IdType = Agent::id_type;
   using TagType = Agent::tag_type;
-  uint32_t operator()(abmoid::agent_t<TagType, IdType> agent) const noexcept {
+  auto operator()(abmoid::agent_t<TagType, IdType> agent) const noexcept {
     return std::hash<IdType>{}(agent.get_id());
   }
 };
+
+template <typename Tag1, typename Tag2, typename IdType1, typename IdType2>
+struct std::hash<std::pair<abmoid::agent_t<Tag1, IdType1>,
+                           abmoid::agent_t<Tag2, IdType2>>> {
+  template <typename Pair>
+  auto operator()(Pair pair) const noexcept {
+    using T1 = abmoid::agent_t<Tag1, IdType1>;
+    using T2 = abmoid::agent_t<Tag2, IdType2>;
+    std::size_t digest = 0;
+    abmoid::detail::hash_combine(digest, std::hash<T1>{}(pair.first));
+    abmoid::detail::hash_combine(digest, std::hash<T2>{}(pair.second));
+    return digest;
+  }
+};
+
 
 #endif

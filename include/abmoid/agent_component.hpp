@@ -67,14 +67,14 @@ public:
     return lookup.contains(a);
   }
 
-  iterator find(Agent a) const {
+  iterator find(Agent a) {
     auto lookup_itr = lookup.find(a);
     if (lookup_itr == lookup.end())
       return values.end();
 
-    unsigned pos = *lookup.second;
+    unsigned pos = lookup_itr->second;
 
-    assert(values.size() < pos);
+    assert(values.size() > pos);
     return values.begin() + pos;
   }
 
