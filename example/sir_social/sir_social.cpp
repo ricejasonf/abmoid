@@ -127,7 +127,7 @@ public:
   // We assume `is_infected` is not the same as
   // the current state.
   void update(person p, bool is_infected) {
-    for (auto itr = groups.begin(); itr != groups.end();) {
+    for (auto itr = groups.begin(); itr != groups.end(); ++itr) {
       social_group g = groups.get_agent(itr);
       if (connections.contains({g, p})) {
         group_data& group = *itr;
@@ -150,10 +150,29 @@ class agent_sir_model {
   abmoid::agent_component<recovered_state, person> R;
   social_group_connections connections;
 
+  void init(parameters const& params) {
+    S.clear();
+    I.clear();
+    R.clear();
 
-  template <typename SocialGroupParams>
-  void init(SocialGroupParams&& sg_params) {
+    auto pairs = std::ranges::views::zip(social_groups, params.groups);
+    for (auto const& [g, params] : pairs)
+      connections.init_group(g, params);
 
+    for (connection_spec const& conn_spec : params.connections) {
+        for (unsigned i = 0; i < conn_spec.N; ++i)
+          for (std::string_view group_name : conn_spec.groups) {
+            person p = people.push_back();
+            connections.add(p, group_name, /*is_infected=*/false);
+            S.create(p, susceptible_state{0});
+          }
+        for (unsigned i = 0; i < conn_spec.I_0; ++i)
+          for (std::string_view group_name : conn_spec.groups) {
+            person p = people.push_back();
+            connections.add(p, group_name, /*is_infected=*/true);
+            assign_I(p);
+          }
+    }
   }
 
   double gen_uniform_random() {
@@ -165,6 +184,7 @@ class agent_sir_model {
     unsigned initial_timer = static_cast<unsigned>(std::round(rand));
 
     I.create(a, infected_state{initial_timer});
+    connections.update(a, /*is_infected=*/true);
   }
 
   void update_S() {
@@ -173,11 +193,10 @@ class agent_sir_model {
       // Count the number of nodes connected to this susceptible person.
       unsigned total_count = 0;
       unsigned infected_count = 0;
+      auto infected_itr = S.end();
       susceptible_state s = *itr;
       if (s.timer == 1) {
-        assign_I(S.get_agent(itr));
-        itr = S.erase(itr);
-        continue;
+        infected_itr = itr;
       } else if (s.timer > 1) {
         --s.timer;
       } else {
@@ -192,15 +211,19 @@ class agent_sir_model {
                 std::exponential_distribution<>(beta_star_g)(gen);
               s.timer = static_cast<unsigned>(std::round(rand));
               if (s.timer == 0) {
-                assign_I(S.get_agent(itr));
-                itr = S.erase(itr);
+                infected_itr = itr;
                 break;
               }
             }
           }
         }
       }
-      ++itr;
+
+      if (infected_itr != S.end()) {
+        assign_I(S.get_agent(itr));
+        itr = S.erase(itr);
+      } else
+        ++itr;
     }
   }
 
@@ -212,6 +235,7 @@ class agent_sir_model {
         person p = I.get_agent(itr);
         R.create(p);
         I.erase(itr);
+        connections.update(p, /*is_infected=*/false);
       } else {
         state.timer -= 1;
         ++itr;
@@ -224,34 +248,16 @@ class agent_sir_model {
   }
 
 public:
-  agent_sir_model(parameters params, std::size_t seed = 0)
+  using seed_type = std::mt19937::result_type;
 
+  agent_sir_model(parameters const& params,
+        seed_type seed = std::mt19937::default_seed)
     : gamma(params.gamma),
-      gen(),
+      gen(seed),
       people(0),
       social_groups(params.groups.size())
   {
-    auto pairs = std::ranges::views::zip(social_groups, params.groups);
-    for (auto const& [g, params] : pairs)
-      connections.init_group(g, params);
-
-    for (connection_spec const& conn_spec : params.connections) {
-        for (unsigned i = 0; i < conn_spec.N; ++i)
-          for (std::string_view group_name : conn_spec.groups)
-            connections.add(people.push_back(), group_name,
-                /*is_infected=*/false);
-        for (unsigned i = 0; i < conn_spec.I_0; ++i)
-          for (std::string_view group_name : conn_spec.groups)
-            connections.add(people.push_back(), group_name,
-                /*is_infected=*/true);
-    }
-  }
-
-  void reset(unsigned I_0) {
-    S.clear();
-    I.clear();
-    R.clear();
-    init(I_0);
+    init(params);
   }
 
   // Each frame we call update.
@@ -267,18 +273,36 @@ public:
 };
 
 int main() {
-  auto params = parameters{
+  auto params_1 = parameters{
     .gamma  = 0.10,
     .groups{
       social_group_params{
         .name= "A",
         .beta = 0.24,
-        .contact_factor = 3
+        .contact_factor = 2
+      }
+    },
+    .connections{
+      connection_spec{
+        .groups = {"A"},
+        .N = 9'090,
+        .I_0 = 10
+      }
+    }
+  };
+
+  auto params_2 = parameters{
+    .gamma  = 0.10,
+    .groups{
+      social_group_params{
+        .name= "A",
+        .beta = 0.24,
+        .contact_factor = 2
       },
       social_group_params{
         .name= "B",
         .beta = 0.24,
-        .contact_factor = 3
+        .contact_factor = 2
       }
     },
     .connections{
@@ -310,11 +334,25 @@ int main() {
   };
   auto begin_new_dataset = [] { std::cout << "\n\n"; };
 
-  // Simulate stuff.
-  agent_sir_model sir(params);
-  for (unsigned i = 0; i < total_frames; ++i) {
-    sir.update();
-    auto [S, I, R] = sir.get_state();
-    print_csv_row(S, I, R, i);
+  {
+    // Simulate stuff.
+    agent_sir_model sir(params_1);
+    for (unsigned i = 0; i < total_frames; ++i) {
+      sir.update();
+      auto [S, I, R] = sir.get_state();
+      print_csv_row(S, I, R, i);
+    }
+  }
+
+  begin_new_dataset();
+
+  {
+    // Simulate stuff again.
+    agent_sir_model sir(params_2);
+    for (unsigned i = 0; i < total_frames; ++i) {
+      sir.update();
+      auto [S, I, R] = sir.get_state();
+      print_csv_row(S, I, R, i);
+    }
   }
 }
