@@ -160,18 +160,18 @@ class agent_sir_model {
       connections.init_group(g, params);
 
     for (connection_spec const& conn_spec : params.connections) {
-        for (unsigned i = 0; i < conn_spec.N; ++i)
-          for (std::string_view group_name : conn_spec.groups) {
-            person p = people.push_back();
+        for (unsigned i = 0; i < conn_spec.N; ++i) {
+          person p = people.push_back();
+          S.create(p, susceptible_state{0});
+          for (std::string_view group_name : conn_spec.groups)
             connections.add(p, group_name, /*is_infected=*/false);
-            S.create(p, susceptible_state{0});
-          }
-        for (unsigned i = 0; i < conn_spec.I_0; ++i)
-          for (std::string_view group_name : conn_spec.groups) {
-            person p = people.push_back();
+        }
+        for (unsigned i = 0; i < conn_spec.I_0; ++i) {
+          person p = people.push_back();
+          assign_I(p);
+          for (std::string_view group_name : conn_spec.groups)
             connections.add(p, group_name, /*is_infected=*/true);
-            assign_I(p);
-          }
+        }
     }
   }
 
@@ -308,8 +308,8 @@ int main() {
     .connections{
       connection_spec{
         .groups = {"A"},
-        .N = 7'490,
-        .I_0 = 10
+        .N = 7'480,
+        .I_0 = 20
       },
       connection_spec{
        .groups = {"B"},
