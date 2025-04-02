@@ -308,17 +308,17 @@ int main() {
     .connections{
       connection_spec{
         .groups = {"A"},
-        .N = 7'480,
-        .I_0 = 20
+        .N = 6'665,
+        .I_0 = 0
       },
       connection_spec{
        .groups = {"B"},
-       .N = 2'490,
-       .I_0 = 0
+       .N = 3'310,
+       .I_0 = 20
       },
       connection_spec{
        .groups = {"A", "B"},
-       .N = 10,
+       .N = 5,
        .I_0 = 0
       },
     }
