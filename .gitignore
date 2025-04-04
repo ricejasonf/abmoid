@@ -1,3 +1,5 @@
 build/*
+**/img/*
 *.swp
 *.out
+*.dat
