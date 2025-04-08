@@ -84,13 +84,12 @@ peak_result run_model(unsigned B) {
 
 int main() {
   constexpr unsigned run_count = 100;
-  // Store results for each B value grouped by peak time.
-  // ie pairwise
   std::vector<unsigned> peak_times(run_count * group_count);
   for (unsigned i = 0; i < run_count; i++) {
     unsigned B = i + 1;
     peak_result peaks = run_model(B);
-    for (unsigned j = 0; j <= group_count; j++)
-      peak_times[i + j * run_count] = peaks[j].t;
+    // Each group's peak time is a column in the csv output.
+    std::cout << peaks[0].t << ',';
+    std::cout << peaks[1].t << '\n';
   }
 }
