@@ -48,27 +48,28 @@ struct infected_state {
   unsigned timer;
 };
 
+// Cache counts and store simulation data needed
+// for each social group when updating susceptible
+// population.
+struct group_state {
+  unsigned I_count = 0;
+  unsigned N_count = 0;
+  double beta_star;
+
+  group_state(double beta_star)
+    : beta_star(beta_star)
+  { }
+};
+
 // Track social group connections and relevant
 // simulation data.
 class social_group_connections {
-  // Cache counts and store simulation data needed
-  // for each social group when updating susceptible
-  // population.
-  struct group_data {
-    unsigned I_count = 0;
-    unsigned N_count = 0;
-    double beta_star;
 
-    group_data(double beta_star)
-      : beta_star(beta_star)
-    { }
-  };
-
-  abmoid::agent_component<group_data, social_group> groups;
+  abmoid::agent_component<group_state, social_group> groups;
   std::unordered_set<std::pair<social_group, person>> connections;
   std::unordered_map<std::string_view, social_group> name_lookup;
 
-  group_data& get_group_data_helper(social_group g) {
+  group_state& get_group_state_helper(social_group g) {
     auto group_itr = groups.find(g);
     assert(group_itr != groups.end());
     return *group_itr;
@@ -77,15 +78,17 @@ class social_group_connections {
 public:
   social_group_connections() = default;
 
-  group_data const& get_group_data(social_group g) const {
+  auto const& get_group_states() const { return groups; }
+
+  group_state const& get_group_state(social_group g) const {
     return const_cast<social_group_connections&>(*this)
-      .get_group_data_helper(g);
+      .get_group_state_helper(g);
   }
 
   void init_group(social_group g, group_params const& params) {
     name_lookup[params.name] = g;
     double beta_star = params.beta * params.contact_factor;
-    groups.create(g, group_data(beta_star));
+    groups.create(g, group_state(beta_star));
   }
 
   social_group get(std::string_view name) const {
@@ -107,7 +110,7 @@ public:
     assert(did_insert && "should add connection only once");
 
     // Get the group data associated with the group agent.
-    group_data& group = get_group_data_helper(g);
+    group_state& group = get_group_state_helper(g);
 
     // Increment N_count if connection did not exist.
     ++group.N_count;
@@ -129,7 +132,7 @@ public:
     for (auto itr = groups.begin(); itr != groups.end(); ++itr) {
       social_group g = groups.get_agent(itr);
       if (connections.contains({g, p})) {
-        group_data& group = *itr;
+        group_state& group = *itr;
         if (is_infected)
           ++group.I_count;
         else
@@ -202,7 +205,7 @@ class agent_model {
         // TODO Possibly handle agent counts in intersection of groups.
         for (social_group g : social_groups) {
           if (connections.contains(g, S.get_agent(itr))) {
-            auto [I_g, N_g, beta_star_g] = connections.get_group_data(g);
+            auto [I_g, N_g, beta_star_g] = connections.get_group_state(g);
             double I_over_N = static_cast<double>(I_g) /
                               static_cast<double>(N_g);
 
@@ -270,8 +273,10 @@ public:
   auto get_state() const {
     return std::array<size_t, 3>{{S.size(), I.size(), R.size()}};
   }
-  auto get_state(social_group g) const {
-    return std::array<size_t, 3>{{S.size(), I.size(), R.size()}};
+
+  // Return const range of group_state.
+  auto const& get_group_states() const {
+    return connections.get_group_states();
   }
 };
 }

@@ -21,6 +21,7 @@ class agent_component {
 
 public:
   using iterator = value_storage::iterator;
+  using const_iterator = value_storage::const_iterator;
 
   void clear() {
     values.clear();
@@ -29,9 +30,9 @@ public:
   }
 
   auto size() const { return values.size(); }
-  iterator begin() const { return values.begin(); }
+  const_iterator begin() const { return values.begin(); }
+  const_iterator end() const { return values.end(); }
   iterator begin() { return values.begin(); }
-  iterator end() const { return values.end(); }
   iterator end() { return values.end(); }
   iterator erase(iterator itr) {
     index_t index = std::distance(values.begin(), itr);
