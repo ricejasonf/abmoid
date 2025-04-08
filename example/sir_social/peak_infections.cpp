@@ -86,9 +86,12 @@ int main() {
   constexpr unsigned run_count = 100;
   std::vector<unsigned> peak_times(run_count * group_count);
   for (unsigned i = 0; i < run_count; i++) {
+    // B - bridge count
     unsigned B = i + 1;
     peak_result peaks = run_model(B);
-    // Each group's peak time is a column in the csv output.
+    // Each group's peak time is a column in the csv output
+    // along with B.
+    std::cout << B << ',';
     std::cout << peaks[0].t << ',';
     std::cout << peaks[1].t << '\n';
   }
