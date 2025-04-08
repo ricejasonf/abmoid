@@ -12,15 +12,16 @@ struct peak {
 };
 using peak_result = std::array<peak, group_count>;
 
-// B - number bridge connections
+// Br - number bridge connections
 //     (ie cardinality of intersection of both groups)
 // Return peak times for each group.
-peak_result run_model(unsigned B) {
+peak_result run_model(unsigned Br, unsigned A_size, unsigned B_size) {
   using parameters = sir_social::parameters;
   using group_params = sir_social::group_params;
   using connection_spec = sir_social::connection_spec;
 
-  unsigned I_0 = 20;
+  assert(A_size <= 10'000);
+  unsigned I_0 = 5;
   constexpr unsigned total_frames = 364;
 
   // Number of agents should be 10'000.
@@ -41,17 +42,17 @@ peak_result run_model(unsigned B) {
     .connections{
       connection_spec{
         .groups = {"A"},
-        .N = 7'500 - I_0 - (B / 2 + B % 2),
+        .N = A_size,
         .I_0 = I_0
       },
       connection_spec{
        .groups = {"B"},
-       .N = 2'500 - (B / 2),
+       .N = 10'000 - A_size,
        .I_0 = 0
       },
       connection_spec{
        .groups = {"A", "B"},
-       .N = B,
+       .N = Br,
        .I_0 = 0
       },
     }
@@ -83,16 +84,26 @@ peak_result run_model(unsigned B) {
 }
 
 int main() {
-  constexpr unsigned run_count = 100;
-  std::vector<unsigned> peak_times(run_count * group_count);
-  for (unsigned i = 0; i < run_count; i++) {
-    // B - bridge count
-    unsigned B = i + 1;
-    peak_result peaks = run_model(B);
-    // Each group's peak time is a column in the csv output
-    // along with B.
-    std::cout << B << ',';
-    std::cout << peaks[0].t << ',';
-    std::cout << peaks[1].t << '\n';
+  // Br - Number of bridge connections
+  constexpr unsigned Br_max = 100;
+  constexpr unsigned Br_step = 5;
+
+  // A - The group "A" where the infection starts.
+  constexpr unsigned A_size_max = 9'500;
+  constexpr unsigned A_size_step = 250;
+
+  for (unsigned A_size = 9'500; A_size > 0; A_size -= A_size_step) {
+    unsigned B_size = 10'000 - A_size;
+    for (unsigned Br = 1; Br <= Br_max; Br += Br_step) {
+      peak_result peaks = run_model(Br, A_size, B_size);
+      // Each group's peak time is a column in the csv output
+      // along with Br.
+      std::cout << Br << ',';
+      std::cout << A_size << ',';
+      std::cout << B_size << ',';
+      std::cout << peaks[0].t << ',';
+      std::cout << peaks[1].t << '\n';
+    }
+    std::cout << "\n\n";  // Begin new dataset.
   }
 }
