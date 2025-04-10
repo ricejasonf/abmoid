@@ -1,3 +1,6 @@
+#ifndef SIR_SOCIAL_HPP
+#define SIR_SOCIAL_HPP
+
 #include <abmoid/agent.hpp>
 #include <abmoid/agent_component.hpp>
 
@@ -281,3 +284,4 @@ public:
 };
 }
 
+#endif
