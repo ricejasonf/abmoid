@@ -110,8 +110,7 @@ void print_result_row(result_row const& row) {
 
 void print_result_set(result_set const& rows) {
   for (result_row const& row : rows)
-    return print_result_row(row);
-  std::cout << "\n\n";
+    print_result_row(row);
 }
 
 // RunExperimentFn

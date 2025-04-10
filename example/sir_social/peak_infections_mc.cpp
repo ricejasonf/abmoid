@@ -5,13 +5,14 @@
 #include "peak_times.hpp"
 
 int main() {
-  static constexpr unsigned Br_max = 1005;
-  static constexpr unsigned Br_step = 100;
 
   auto run = [](unsigned seed) {
     peak_times::result_set results;
     unsigned A_N = 5'000;
     unsigned B_N = 5'000;
+    unsigned Br_max = 1005;
+    unsigned Br_step = 100;
+
     for (unsigned Br = 5; Br < Br_max; Br += Br_step) {
       unsigned B_N = 10'000 - A_N;
       peak_times::peak_result peaks = peak_times::run_model(Br, A_N, B_N, seed);
