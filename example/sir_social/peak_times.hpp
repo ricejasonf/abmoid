@@ -114,6 +114,12 @@ void print_result_set(result_set const& rows) {
   std::cout << "\n\n";
 }
 
+// RunExperimentFn
+//  - result_set run(unsigned seed);
+//  - Runs in a thread so it should be a pure function
+// HandleResultSetFn
+//  - void handle(result_set);
+//  - Runs in calling thread.
 template <typename RunExperimentFn, typename HandleResultSetFn>
 void run_experiments(unsigned total_runs, unsigned max_threads,
                      RunExperimentFn&& run,
@@ -121,20 +127,22 @@ void run_experiments(unsigned total_runs, unsigned max_threads,
   std::vector<std::future<result_set>> result_sets;
   std::atomic<unsigned> jobs_finished = 0;
 
-  while (total_runs > 0) {
-    unsigned num_runs = std::min(total_runs, max_threads);
+  for (unsigned i = 0; i < total_runs;) {
+    unsigned num_runs = std::min(total_runs - i, max_threads);
+    result_sets.clear();
 
     // Start up a bunch of asynchronous runs.
-    for (unsigned i = 0; i < max_threads; i++)
-      result_sets.push_back(std::async(std::launch::async, run));
+    for (unsigned j = 0; j < num_runs; j++) {
+      unsigned seed = i + j;
+      result_sets.push_back(std::async(std::launch::async, run, seed));
+    }
 
     // For each run, block this thread until it gets the result,
     // and then handle it.
-    for (auto& future : result_sets) {
+    for (auto& future : result_sets)
       handle_result(future.get());
-    }
 
-    total_runs -= num_runs;
+    i += num_runs;
   }
 }
 
