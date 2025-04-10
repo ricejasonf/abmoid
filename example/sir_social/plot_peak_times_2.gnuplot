@@ -1,5 +1,5 @@
-set terminal gif animate size 560,420 enhanced loop 0
-set output 'img/peak_times.gif'
+set terminal gif animate delay 50 size 560,420 enhanced loop 0
+set output 'img/peak_times_2.gif'
 set datafile separator ","
 
 set title "Peak Time \"Bifurcation Diagram\" on Bridge Count"
@@ -7,9 +7,9 @@ set key box opaque
 set key box width 1.5 
 set key title center
 
-set xlabel "Bridge Count"
+set xlabel "B.N"
 set ylabel "Peak Time"
-set xrange [1:100]
+set xrange [0:9500]
 set yrange [0:364]
 
 # Define darker variants for Set 2
@@ -24,16 +24,14 @@ darker_R = "#CDE5D2"
 set size ratio 1
 set size 0.70, 1.0
 
-do for [i = 0:8] {
+do for [i = 1:9] {
   set multiplot
-
   plot "output_peak_times.dat" index i \
-               using 1:4:(A = strcol(2), B = strcol(3)) with lines title 'A' \
+               using 3:4:(Br = strcol(1)) with lines title 'A.I' \
                linecolor rgb original_S lw 2, \
        "output_peak_times.dat" index i \
-               using 1:5 with lines title 'B' \
+               using 3:5 with lines title 'B.I' \
                linecolor rgb original_I lw 2
-      set label 1 "A = " . A left at screen 0.75, 0.55
-      set label 2 "B = " . B left at screen 0.75, 0.50
+      set label 1 "Br = " . Br left at screen 0.75, 0.55
   unset multiplot
 }
