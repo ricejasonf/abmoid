@@ -64,10 +64,15 @@ struct group_state {
   { }
 };
 
+struct group_name {
+  std::string_view value;
+};
+
 // Track social group connections and relevant
 // simulation data.
 class social_group_connections {
 
+  abmoid::agent_component<group_name, social_group> group_names;
   abmoid::agent_component<group_state, social_group> groups;
   std::unordered_set<std::pair<social_group, person>> connections;
   std::unordered_map<std::string_view, social_group> name_lookup;
@@ -81,6 +86,7 @@ class social_group_connections {
 public:
   social_group_connections() = default;
 
+  auto const& get_group_names() const { return group_names; }
   auto const& get_group_states() const { return groups; }
 
   group_state const& get_group_state(social_group g) const {
@@ -91,6 +97,7 @@ public:
   void init_group(social_group g, group_params const& params) {
     name_lookup[params.name] = g;
     double beta_star = params.beta * params.contact_factor;
+    group_names.create(g, group_name(params.name));
     groups.create(g, group_state(beta_star));
   }
 
@@ -275,6 +282,11 @@ public:
 
   auto get_state() const {
     return std::array<size_t, 3>{{S.size(), I.size(), R.size()}};
+  }
+
+  // Return const range of group_name.
+  auto const& get_group_names() const {
+    return connections.get_group_names();
   }
 
   // Return const range of group_state.

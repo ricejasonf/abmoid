@@ -6,3 +6,6 @@ output_peak_times_mc.dat: c.out
 
 plot_peak_times_mc_1.png: output_peak_times_mc.dat
 	gnuplot plot_peak_times_mc_1.gnuplot
+
+sir_network.out : sir_network.cpp sir_social.hpp
+	$(CXX) -O3 -std=c++23 -I../../include/ sir_network.cpp -o sir_network.out
