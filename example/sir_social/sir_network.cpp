@@ -16,50 +16,68 @@ int main() {
     };
   };
 
+  using connection_spec = sir_social::connection_spec;
+
   auto params = sir_social::parameters{
     .gamma  = 0.10,
     .groups{
       group("A"),
       group("B"),
       group("C"),
-      group("D")
-    }
+      group("D"),
+      group("E")
+    },
     .connections{
       // Define group populations.
       connection_spec{
         .groups = {"A"},
-        .N = 5'000,
+        .N = 5'050 - I_0,
         .I_0 = I_0
       },
       connection_spec{
        .groups = {"B"},
-       .N = 5'000
+       .N = 5'000,
        .I_0 = 0
       },
       connection_spec{
        .groups = {"C"},
-       .N = 5'000
+       .N = 5'000,
        .I_0 = 0
       },
       connection_spec{
        .groups = {"D"},
-       .N = 5'000
+       .N = 5'050,
+       .I_0 = 0
+      },
+      connection_spec{
+       .groups = {"E"},
+       .N = 5'000,
        .I_0 = 0
       },
       // Connect the groups.
       connection_spec{
        .groups = {"A", "B"},
-       .N = 50,
+       .N = 30,
        .I_0 = 0
       },
       connection_spec{
        .groups = {"B", "C"},
-       .N = 50,
+       .N = 30,
        .I_0 = 0
       },
       connection_spec{
        .groups = {"C", "D"},
-       .N = 50,
+       .N = 30,
+       .I_0 = 0
+      },
+      connection_spec{
+       .groups = {"D", "E"},
+       .N = 30,
+       .I_0 = 0
+      },
+      connection_spec{
+       .groups = {"B", "E"},
+       .N = 30,
        .I_0 = 0
       }
     }
@@ -71,23 +89,24 @@ int main() {
 
   // Print population datasets consisting of row with group names
   // and a row for the total populations for each group.
-  infected_data << "t, ";
+  infected_data << "# t, ";
   for (auto [name] : sir.get_group_names())
     infected_data << name << "_N, ";
+  infected_data << "\n";
 
-  infected_data << "\n\nt, ";
-  for (auto [name] : sir.get_group_names())
-    infected_data << name << "_N, ";
+  // Plot total population for each group.
+  infected_data << "# Group population counts.\n";
+  infected_data << "0";
+  for (auto [I_count, N_count, beta_star] : sir.get_group_states())
+    infected_data << ", " << N_count;
+  infected_data << "\n\n\n";
 
-  infected_data << "t, ";
-  for (auto [name] : sir.get_group_names())
-    infected_data << name << "_N, ";
-
+  infected_data << "# Group infected counts.\n";
   for (unsigned t = 0; t < total_frames; ++t) {
     sir.update();
-    infected_data << t << ", ";
+    infected_data << t;
     for (auto const& group : sir.get_group_states())
-      infected_data << group.I_count << ", ";
+      infected_data << ", " << group.I_count;
     infected_data << '\n';
   }
 }

@@ -9,3 +9,12 @@ plot_peak_times_mc_1.png: output_peak_times_mc.dat
 
 sir_network.out : sir_network.cpp sir_social.hpp
 	$(CXX) -O3 -std=c++23 -I../../include/ sir_network.cpp -o sir_network.out
+
+data/sir_network_infected.dat: sir_network.out
+	./sir_network.out
+
+plot_sir_network.png: data/sir_network_infected.dat
+	gnuplot plot_sir_network.gnuplot
+
+plot_sir_network_graph.png: data/sir_network_infected.dat
+	gnuplot plot_sir_network_graph.gnuplot
