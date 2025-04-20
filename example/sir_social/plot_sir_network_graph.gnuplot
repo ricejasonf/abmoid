@@ -3,14 +3,16 @@ set output 'img/sir_network_graph.png'
 set datafile separator ","
 
 set title "SIR Network Diagram"
-set key box opaque
-set key box width 1.5
-set key title center
+#set key box opaque
+#set key box width 1.5
+#set key title center
 
 #set xlabel "Time"
 #set ylabel "Infected Pop."
 set xrange [0:4]
 set yrange [0:3]
+unset xtics
+unset ytics
 
 # Colors from https://www.molecularecologist.com/2020/04/23/simple-tools-for-mastering-color-in-scientific-figures/
 color_A = 0xFF1F5B;
@@ -18,6 +20,7 @@ color_B = 0x00CD6C;
 color_C = 0x009ADE;
 color_D = 0xAF58BA;
 color_E = 0xF28522;
+color_Sick = 0xFFC61E;
 
 $COLORS << EOD
 color_A
@@ -37,8 +40,8 @@ $POINTS << EOD
 A, 0.8, 2.3
 B, 1.6, 2.2
 C, 2.4, 1.7
-D, 3.2, 0.8
-E, 1.2, 0.6
+D, 3.2, 1.0
+E, 1.2, 0.8
 EB, 1.6, 2.2 # E -> B
 EOD
 print $POINTS
@@ -52,9 +55,10 @@ print $POPS_POINTS
 
 set multiplot
 # Plot the edges.
-plot $POINTS using 2:3 with lines linecolor rgb "black" lw 2
+plot $POINTS using 2:3 notitle with lines linecolor rgb "black" lw 2
 
+# Plot social group nodes with labels.
 set style fill solid
-plot $POPS_POINTS using 2:3:4:5 with circles fillcolor rgb variable, \
-     $POPS_POINTS using 2:3:(stringcolumn(1)) with labels
+plot $POPS_POINTS using 2:3:4:5 notitle with circles fillcolor rgb variable, \
+     $POPS_POINTS using 2:3:(stringcolumn(1)) notitle with labels
 unset multiplot
