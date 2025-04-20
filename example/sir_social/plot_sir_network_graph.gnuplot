@@ -13,11 +13,20 @@ set xrange [0:4]
 set yrange [0:3]
 
 # Colors from https://www.molecularecologist.com/2020/04/23/simple-tools-for-mastering-color-in-scientific-figures/
-color_A = "#FF1F5B";
-color_B = "#00CD6C";
-color_C = "#009ADE";
-color_D = "#AF58BA";
-color_E = "black";
+color_A = 0xFF1F5B;
+color_B = 0x00CD6C;
+color_C = 0x009ADE;
+color_D = 0xAF58BA;
+color_E = 0xF28522;
+
+$COLORS << EOD
+color_A
+color_B
+color_C
+color_D
+color_E
+EOD
+print $COLORS
 
 set table $POPS
   plot "data/sir_network_infected.dat" index 0 with table
@@ -25,23 +34,27 @@ unset table
 
 # Social group node position and edge data.
 $POINTS << EOD
-0.8, 2.3 # A
-1.6, 2.2 # B
-2.4, 1.7 # C
-3.2, 0.8 # D
-1.2, 0.6 # E
-1.6, 2.2 # B
+A, 0.8, 2.3
+B, 1.6, 2.2
+C, 2.4, 1.7
+D, 3.2, 0.8
+E, 1.2, 0.6
+EB, 1.6, 2.2 # E -> B
 EOD
+print $POINTS
 
 set table $POPS_POINTS separator comma
-  plot $POINTS every ::0::4 using 1:2:(word($POPS[1], int($0 + 2))*.00006) with table
+  plot $POINTS every ::0::4 \
+    using (stringcolumn(1)):2:3:(word($POPS[1], int($0 + 2))*.00006):(value($COLORS[$0 + 1])) \
+    with table
 unset table
 print $POPS_POINTS
 
 set multiplot
 # Plot the edges.
-plot $POINTS with lines linecolor rgb "black" lw 2
+plot $POINTS using 2:3 with lines linecolor rgb "black" lw 2
 
 set style fill solid
-plot $POPS_POINTS using 1:2:3 with circles fillcolor rgb color_A
+plot $POPS_POINTS using 2:3:4:5 with circles fillcolor rgb variable, \
+     $POPS_POINTS using 2:3:(stringcolumn(1)) with labels
 unset multiplot
