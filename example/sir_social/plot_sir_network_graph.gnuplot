@@ -1,8 +1,4 @@
-set terminal pngcairo size 560,420 enhanced
-set output 'img/sir_network_graph.png'
 set datafile separator ","
-
-set title "SIR Network Diagram"
 #set key box opaque
 #set key box width 1.5
 #set key title center
@@ -76,20 +72,38 @@ function $plot_infecteds(t) << EOF
   plot "data/sir_network_infected.dat" \
         index 1 every ::t::t with table
   unset table
-  print $POPS
-  print $I_ROW[1]
   set table $I_POINTS separator comma
     plot $POINTS every ::0::4 \
       using (stringcolumn(1)):2:3:($scale_radius(word($I_ROW[1], int($0 + 2)))) \
       with table
   unset table
-  print $I_POINTS
   set style fill solid
   plot $I_POINTS using 2:3:4 notitle with circles fillcolor rgb color_Sick, \
        $I_POINTS using 2:3:(stringcolumn(1)) notitle with labels
 EOF
 
-set multiplot
-  result = $plot_base()
-  result = $plot_infecteds(0)
-unset multiplot
+function $full_plot(t) << EOF
+  set multiplot
+    set title sprintf("SIR Network Diagram (t = %i)", t)
+    result = $plot_base()
+    result = $plot_infecteds(t)
+  unset multiplot
+EOF
+
+set terminal pngcairo size 560,420 enhanced
+set output 'img/sir_network_graph_1.png'
+result = $full_plot(0)
+set output 'img/sir_network_graph_2.png'
+result = $full_plot(33)
+set output 'img/sir_network_graph_3.png'
+result = $full_plot(66)
+set output 'img/sir_network_graph_4.png'
+result = $full_plot(99)
+
+# Cannot seem to do both without losing data.
+#set terminal gif animate size 560,420 enhanced loop 0
+#set output 'img/sir_network_graph.gif'
+#do for [t = 0:384] {
+#  anim = $full_plot(t)
+#}
+
