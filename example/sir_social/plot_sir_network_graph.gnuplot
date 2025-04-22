@@ -48,7 +48,7 @@ function $scale_radius(value) << EOF
   if (value <= 0) {
     return 0;
   } else {
-    return log10(value * 0.00045);
+    return log10(value) * 0.1;
   }
 EOF
 
@@ -91,5 +91,5 @@ EOF
 
 set multiplot
   result = $plot_base()
-  result = $plot_infecteds(100)
+  result = $plot_infecteds(0)
 unset multiplot
