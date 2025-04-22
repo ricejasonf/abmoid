@@ -29,7 +29,6 @@ color_C
 color_D
 color_E
 EOD
-print $COLORS
 
 set table $POPS
   plot "data/sir_network_infected.dat" index 0 with table
@@ -44,21 +43,53 @@ D, 3.2, 1.0
 E, 1.2, 0.8
 EB, 1.6, 2.2 # E -> B
 EOD
-print $POINTS
+
+function $scale_radius(value) << EOF
+  if (value <= 0) {
+    return 0;
+  } else {
+    return log10(value * 0.00045);
+  }
+EOF
 
 set table $POPS_POINTS separator comma
   plot $POINTS every ::0::4 \
-    using (stringcolumn(1)):2:3:(word($POPS[1], int($0 + 2))*.00006):(value($COLORS[$0 + 1])) \
+    using (stringcolumn(1)):2:3:($scale_radius(word($POPS[1], int($0 + 2)))):(value($COLORS[$0 + 1])) \
+    with table
+    #using (stringcolumn(1)):2:3:(word($POPS[1], int($0 + 2))*.00006):(value($COLORS[$0 + 1])) \
     with table
 unset table
-print $POPS_POINTS
+
+function $plot_base() << EOF
+  # Plot the edges.
+  plot $POINTS using 2:3 notitle with lines linecolor rgb "black" lw 2
+
+  # Plot social group nodes with labels.
+  set style fill solid
+  plot $POPS_POINTS using 2:3:4:5 notitle with circles fillcolor rgb variable, \
+       $POPS_POINTS using 2:3:(stringcolumn(1)) notitle with labels
+EOF
+
+function $plot_infecteds(t) << EOF
+  # The word function doesn't like commas I guess.
+  set table $I_ROW separator tab
+  plot "data/sir_network_infected.dat" \
+        index 1 every ::t::t with table
+  unset table
+  print $POPS
+  print $I_ROW[1]
+  set table $I_POINTS separator comma
+    plot $POINTS every ::0::4 \
+      using (stringcolumn(1)):2:3:($scale_radius(word($I_ROW[1], int($0 + 2)))) \
+      with table
+  unset table
+  print $I_POINTS
+  set style fill solid
+  plot $I_POINTS using 2:3:4 notitle with circles fillcolor rgb color_Sick, \
+       $I_POINTS using 2:3:(stringcolumn(1)) notitle with labels
+EOF
 
 set multiplot
-# Plot the edges.
-plot $POINTS using 2:3 notitle with lines linecolor rgb "black" lw 2
-
-# Plot social group nodes with labels.
-set style fill solid
-plot $POPS_POINTS using 2:3:4:5 notitle with circles fillcolor rgb variable, \
-     $POPS_POINTS using 2:3:(stringcolumn(1)) notitle with labels
+  result = $plot_base()
+  result = $plot_infecteds(100)
 unset multiplot
