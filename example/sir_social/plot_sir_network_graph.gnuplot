@@ -90,6 +90,14 @@ function $full_plot(t) << EOF
   unset multiplot
 EOF
 
+
+# Cannot seem to do both without losing data.
+set terminal gif animate size 560,420 enhanced loop 0
+set output 'img/sir_network_graph.gif'
+do for [t = 0:225] {
+  anim = $full_plot(t)
+}
+
 set terminal pngcairo size 560,420 enhanced
 set output 'img/sir_network_graph_1.png'
 result = $full_plot(0)
@@ -99,11 +107,4 @@ set output 'img/sir_network_graph_3.png'
 result = $full_plot(66)
 set output 'img/sir_network_graph_4.png'
 result = $full_plot(99)
-
-# Cannot seem to do both without losing data.
-#set terminal gif animate size 560,420 enhanced loop 0
-#set output 'img/sir_network_graph.gif'
-#do for [t = 0:384] {
-#  anim = $full_plot(t)
-#}
 
