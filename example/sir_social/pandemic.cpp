@@ -5,8 +5,19 @@
 
 #include "sir_social.hpp"
 
-static std::vector<entry> input_data{
+struct entry {
+  std::string_view code_from;
+  std::string_view code_to;
+  unsigned sci_value;
+  unsigned I_0;  // not scaled
+};
+
+static std::vector<entry> input_country_connections{
 #include "country_connections.hpp"
+};
+
+static std::vector<entry> input_national_pops{
+#include "national_pops.hpp"
 };
 
 
@@ -16,21 +27,9 @@ using connection_spec = sir_social::connection_spec;
 void generate_inputs(unsigned sci_scale_factor,
                      std::vector<group_params>& groups,
                      std::vector<connection_spec>& connections) {
-}
-
-int main() {
-  constexpr unsigned total_frames = 364;
   constexpr double beta = 0.24;
-  // Scale the already scaled input population data.
-  // (1 / 2)^{sci_scale_factor}
-  unsigned sci_scale_factor = 20;
-
-  struct entry {
-    std::string_view code_from;
-    std::string_view code_to;
-    unsigned sci_value;
-    unsigned I_0;  // not scaled
-  };
+  groups.clear();
+  connections.clear();
 
   auto group = [](std::string_view name) {
     return sir_social::group_params{
@@ -40,8 +39,6 @@ int main() {
     };
   };
 
-  std::vector<group_params> groups;
-  std::vector<connection_spec> connections;
   std::vector<std::string_view> group_names;
   for (entry const& x : input_data) {
     // Remove duplicates by lexicographical comparison.
@@ -58,10 +55,10 @@ int main() {
     // If the codes are the same, that is just the population.
     group_names.clear();
     group_names.push_back(x.code_from);
-    groups.push_back(group(x.code_from));
-    if (x.code_from != x.code_to) {
+    if (x.code_from == x.code_to)
+      groups.push_back(group(x.code_from));
+    else
       group_names.push_back(x.code_to);
-    }
 
     connections.push_back(connection_spec{
       .groups = group_names,
@@ -94,20 +91,35 @@ int main() {
       ++itr;
     }
   }
+}
 
-  std::cout << "There are:"
-               "\n\tCountries:\t" << groups.size() <<
-               "\n\tConnections:\t" << connections.size() <<
-               "\n\nDo you wish to proceed with simulation? [yes/no] ";
+int main() {
+  constexpr unsigned total_frames = 364;
+  // Scale the already scaled input population data.
+  // (1 / 2)^{sci_scale_factor}
+  unsigned sci_scale_factor = 32;
+  std::vector<group_params> groups;
+  std::vector<connection_spec> connections;
 
-  std::string answer;
-  while ((std::cin >> answer) && answer != "yes" && answer != "no") {
-    // continue
-  }
+  while (true) {
+    std::cout << "\nPlease enter the sci_scale_factor: ";
+    if (!(std::cin >> sci_scale_factor)) {
+      std::cout << "\nInput error!\n";
+      std::exit(1);
+    }
+    generate_inputs(sci_scale_factor, groups, connections);
+    std::cout << "There are:"
+                 "\n\tCountries:\t" << groups.size() <<
+                 "\n\tConnections:\t" << connections.size() <<
+                 "\n\nDo you wish to proceed with simulation? [yes/no] ";
 
-  if (answer == "no") {
-    std::cout << "\n\nOkay.. good bye.\n";
-    return 0;
+    std::string answer;
+    while ((std::cin >> answer) && answer != "yes" && answer != "no") {
+      // continue
+    }
+
+    if (answer == "yes")
+      break;
   }
 
   std::cout << "\nBegin simulation!\n";
