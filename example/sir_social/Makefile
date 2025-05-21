@@ -1,3 +1,6 @@
+d.out: pandemic.cpp sir_social.hpp
+	$(CXX) -g -std=c++23 -I../../include/ pandemic.cpp -o d.out
+
 c.out: peak_infections_mc.cpp peak_times.hpp sir_social.hpp
 	$(CXX) -O3 -std=c++23 -I../../include/ peak_infections_mc.cpp -o c.out
 
