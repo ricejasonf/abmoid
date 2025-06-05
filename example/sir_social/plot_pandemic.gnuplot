@@ -12,66 +12,74 @@ set style line 2 lc rgb 'black' lt 1 lw 1
 unset key
 unset tics
 
-set xrange [0:950]
-set yrange [620:0]
+set xrange [30:784+100]
+set yrange [699+25:241-25]
 
 # Country indices for world.dat
-BD = 14
-BR = 22
-CO = 65
-DE = 73
-EG = 86
-ET = 93
-FR = 97
-GB = 105
-ID = 125
-IN = 139
-IT = 143
-JP = 148
-KE = 154
-KR = 159
-MM = 178
-MX = 187
-NG = 194
-PH = 210
-PK = 217
-TH = 283
-TR = 287
-TZ = 290
-US = 293
-VN = 305
-ZA = 311
+$MAP_IDS << EOD
+14 # BD
+22 # BR
+65 # CO
+73 # DE
+86 # EG
+93 # ET
+97 # FR
+105 # GB
+125 # ID
+139 # IN
+143 # IT
+148 # JP
+154 # KE
+159 # KR
+178 # MM
+187 # MX
+194 # NG
+210 # PH
+217 # PK
+283 # TH
+287 # TR
+290 # TZ
+293 # US
+305 # VN
+311 # ZA
+EOD
 
 set colorbox user
-set cbrange[0:5000]
-set palette defined(0 "white", 5000 "red")
-
-color_max = 5001
-color_norm(val) = int(real(val) / color_max * 256)
-color(val) = floor(65536 * color_norm(val) + 256 * 0 + 0)
-function $plot_country(i, val) << EOF
-  print color(val)
-  plot 'data/world.dat' index i with filledcurves ls 2
-  plot 'data/world.dat' index i using 1:2:(val) with filledcurves \
-    lc palette
-    #lc rgb variable
-EOF
+set cbrange[0:17000]
+set palette defined(0 "white", 17000 "red")
 
 set output 'img/pandemic.png'
 set multiplot
-do for [i = 0:334] {
-  plot 'data/world.dat' index i with filledcurves ls 2
-  plot 'data/world.dat' index i with filledcurves ls 1
+do for [i = 0:313] {
+  plot 'data/world2.dat' index i with filledcurves ls 2
+  plot 'data/world2.dat' index i with filledcurves ls 1
 }
 
-void = $plot_country(britain, 2500)
-void = $plot_country(canada, 2500)
-void = $plot_country(china, 500)
-void = $plot_country(france, 2500)
-void = $plot_country(germany, 2500)
-void = $plot_country(india, 2500)
-void = $plot_country(mexico, 2500)
-void = $plot_country(south_korea, 2500)
-void = $plot_country(usa, 5000)
+color_max = 17001
+color_norm(val) = int(real(val) / color_max * 256)
+color(val) = floor(65536 * color_norm(val) + 256 * 0 + 0)
+function $plot_country(map_index, val) << EOF
+  plot 'data/world2.dat' index map_index with filledcurves ls 2
+  plot 'data/world2.dat' index map_index using 1:2:(val) with filledcurves \
+    lc palette
+EOF
+
+function $plot_infecteds(co, t) << EOF
+  set table $I_ROW
+  plot "data/pandemic.dat" \
+    index 1 \
+    using 1:(int($MAP_IDS[co])):(column(co + 1)) \
+    every ::t::t with table
+  unset table
+  void = $plot_country(int(word($I_ROW[1], 2)), int(word($I_ROW[1], 3)))
+EOF
+
+# Draw China with I = 0 as a joke since they block facebook.
+void = $plot_country(63, 0)
+
+# Iterate the nations.
+do for [i = 1:25] {
+  void = $plot_infecteds(i, 0)
+}
 unset multiplot
 
