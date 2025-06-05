@@ -1,24 +1,40 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 
 #include "sir_social.hpp"
 
-struct entry {
+struct connection_entry {
   std::string_view code_from;
   std::string_view code_to;
   unsigned sci_value;
   unsigned I_0;  // not scaled
 };
 
-static std::vector<entry> input_country_connections{
+struct national_population_entry {
+  std::string_view code;
+  std::string_view aux_code;
+  std::string_view name;
+  unsigned population;
+};
+
+static std::vector<connection_entry> input_country_connections{
 #include "country_connections.hpp"
 };
 
-static std::vector<entry> input_national_pops{
+static std::unordered_map<std::string_view, national_population_entry>
+input_national_pops{
 #include "national_pops.hpp"
 };
+
+unsigned get_national_pop(std::string_view code) {
+  auto itr = input_national_pops.find(code);
+  if (itr == input_national_pops.end())
+    return 0;
+  return itr->second.population;
+}
 
 
 using group_params = sir_social::group_params;
@@ -40,13 +56,36 @@ void generate_inputs(unsigned sci_scale_factor,
   };
 
   std::vector<std::string_view> group_names;
-  for (entry const& x : input_data) {
+  for (connection_entry const& x : input_country_connections) {
     // Remove duplicates by lexicographical comparison.
     if (x.code_from > x.code_to)
       continue;
 
+    // Do not include countries with small populations.
+    unsigned pop = get_national_pop(x.code_from);
+    unsigned pop_to = get_national_pop(x.code_to);
+    constexpr unsigned min_pop = 50'000'000;
+    if (pop < min_pop || pop_to < min_pop)
+      continue;
+
     // Scale and round the SCI values.
-    unsigned sci_value = x.sci_value >> sci_scale_factor;
+    unsigned sci_value = 0;
+    if (x.code_from == x.code_to) {
+      // Create entry for country population
+      // (in place of connections to self.)
+      sci_value = pop >> (sci_scale_factor + 1);
+    } else {
+      sci_value = x.sci_value >> sci_scale_factor;
+    }
+
+    auto nation_itr = input_national_pops.find(x.code_from);
+#if 0
+    if (x.code_from == x.code_to && nation_itr != input_national_pops.end()) {
+      auto nation = nation_itr->second;
+      std::cout << nation.name << " (I_0 = " << x.I_0 << "): " <<
+                   nation.population << " -> " << sci_value << '\n';
+    }
+#endif
 
     // Cull insignificant sci_values.
     if (sci_value == 0)
@@ -97,10 +136,11 @@ int main() {
   constexpr unsigned total_frames = 364;
   // Scale the already scaled input population data.
   // (1 / 2)^{sci_scale_factor}
-  unsigned sci_scale_factor = 32;
+  unsigned sci_scale_factor = 11;
   std::vector<group_params> groups;
   std::vector<connection_spec> connections;
 
+#if 0
   while (true) {
     std::cout << "\nPlease enter the sci_scale_factor: ";
     if (!(std::cin >> sci_scale_factor)) {
@@ -121,10 +161,11 @@ int main() {
     if (answer == "yes")
       break;
   }
+#endif
+  generate_inputs(sci_scale_factor, groups, connections);
 
   std::cout << "\nBegin simulation!\n";
 
-#if 0
   auto params = sir_social::parameters{
     .gamma  = 0.10,
     .groups = groups,
@@ -149,14 +190,19 @@ int main() {
   infected_data << "\n\n\n";
 
   infected_data << "# Group infected counts.\n";
+  std::cout << "t = 000";
+  std::cout.flush();
   for (unsigned t = 0; t < total_frames; ++t) {
     sir.update();
     infected_data << t;
     for (auto const& group : sir.get_group_states())
       infected_data << ", " << group.I_count;
     infected_data << '\n';
+    std::cout << "\b\b\b";  // Erase the previous time digits.
+    std::cout << std::setfill('0') << std::setw(3) << t;
+    std::cout.flush();
   }
+  std::cout << '\n';
 
   // Output max infected count.
-#endif
 }
