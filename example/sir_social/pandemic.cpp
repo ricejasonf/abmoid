@@ -179,7 +179,7 @@ int main() {
   // and a row for the total populations for each group.
   infected_data << "# t, ";
   for (auto [name] : sir.get_group_names())
-    infected_data << name << "_N, ";
+    infected_data << name << ", ";
   infected_data << "\n";
 
   // Plot total population for each group.
@@ -193,7 +193,6 @@ int main() {
   std::cout << "t = 000";
   std::cout.flush();
   for (unsigned t = 0; t < total_frames; ++t) {
-    sir.update();
     infected_data << t;
     for (auto const& group : sir.get_group_states())
       infected_data << ", " << group.I_count;
@@ -201,6 +200,7 @@ int main() {
     std::cout << "\b\b\b";  // Erase the previous time digits.
     std::cout << std::setfill('0') << std::setw(3) << t;
     std::cout.flush();
+    sir.update();
   }
   std::cout << '\n';
 

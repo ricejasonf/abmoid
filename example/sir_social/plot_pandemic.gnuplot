@@ -16,15 +16,31 @@ set xrange [0:950]
 set yrange [620:0]
 
 # Country indices for world.dat
-britain = 291
-canada = 224
-china = 252
-france = 306
-germany = 309
-india = 263
-mexico = 2
-south_korea = 255
-usa = 225
+BD = 14
+BR = 22
+CO = 65
+DE = 73
+EG = 86
+ET = 93
+FR = 97
+GB = 105
+ID = 125
+IN = 139
+IT = 143
+JP = 148
+KE = 154
+KR = 159
+MM = 178
+MX = 187
+NG = 194
+PH = 210
+PK = 217
+TH = 283
+TR = 287
+TZ = 290
+US = 293
+VN = 305
+ZA = 311
 
 set colorbox user
 set cbrange[0:5000]
