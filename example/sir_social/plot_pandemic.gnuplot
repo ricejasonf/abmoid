@@ -48,20 +48,13 @@ set colorbox user
 set cbrange[0:17000]
 set palette defined(0 "white", 17000 "red")
 
-set output 'img/pandemic.png'
-set multiplot
-do for [i = 0:313] {
-  plot 'data/world2.dat' index i with filledcurves ls 2
-  plot 'data/world2.dat' index i with filledcurves ls 1
-}
-
 color_max = 17001
 color_norm(val) = int(real(val) / color_max * 256)
 color(val) = floor(65536 * color_norm(val) + 256 * 0 + 0)
 function $plot_country(map_index, val) << EOF
-  plot 'data/world2.dat' index map_index with filledcurves ls 2
   plot 'data/world2.dat' index map_index using 1:2:(val) with filledcurves \
     lc palette
+  plot 'data/world2.dat' index map_index with lines ls 2
 EOF
 
 function $plot_infecteds(co, t) << EOF
@@ -74,12 +67,37 @@ function $plot_infecteds(co, t) << EOF
   void = $plot_country(int(word($I_ROW[1], 2)), int(word($I_ROW[1], 3)))
 EOF
 
+
+set output 'img/pandemic.png'
+set multiplot
+do for [i = 0:313] {
+  plot 'data/world2.dat' index i with filledcurves ls 1
+  plot 'data/world2.dat' index i with lines ls 2
+}
 # Draw China with I = 0 as a joke since they block facebook.
 void = $plot_country(63, 0)
 
 # Iterate the nations.
 do for [i = 1:25] {
-  void = $plot_infecteds(i, 0)
+  void = $plot_infecteds(i, 125)
 }
 unset multiplot
 
+set terminal gif animate size 640,480 enhanced loop 0
+set output 'img/pandemic.gif'
+do for [t = 0:363:8] {
+set multiplot
+set title sprintf("Global Pandemic (25 Largest Nations) t = %i", t)
+do for [i = 0:313] {
+  plot 'data/world2.dat' index i with filledcurves ls 1
+  plot 'data/world2.dat' index i with lines ls 2
+}
+# Draw China with I = 0 as a joke since they block facebook.
+void = $plot_country(63, 0)
+
+# Iterate the nations.
+do for [i = 1:25] {
+  void = $plot_infecteds(i, t)
+}
+unset multiplot
+}
