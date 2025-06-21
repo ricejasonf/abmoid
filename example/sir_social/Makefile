@@ -24,3 +24,6 @@ plot_sir_network_graph.png: data/sir_network_infected.dat
 
 plot_pandemic.png: data/pandemic.dat data/world2.dat
 	gnuplot plot_pandemic.gnuplot
+
+plot_pandemic_time_series.png: data/pandemic.dat
+	gnuplot plot_pandemic_time_series.gnuplot

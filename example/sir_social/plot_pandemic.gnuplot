@@ -74,8 +74,6 @@ do for [i = 0:313] {
   plot 'data/world2.dat' index i with filledcurves ls 1
   plot 'data/world2.dat' index i with lines ls 2
 }
-# Draw China with I = 0 as a joke since they block facebook.
-void = $plot_country(63, 0)
 
 # Iterate the nations.
 do for [i = 1:25] {
