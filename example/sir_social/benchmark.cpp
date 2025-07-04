@@ -97,7 +97,8 @@ int main() {
   };
 
   // Benchmark a single group of various sizes.
-  for (unsigned i = 0; i <= 200'000; i += 500) {
+  benchmark_dat << "# num_groups, group_size, num_agents, mean_elapsed (ms)\n";
+  for (unsigned i = 0; i <= 200'000; i += 5'000) {
     duration_t mean_elapsed;
     unsigned num_agents = 0;
     unsigned num_groups = 1;
@@ -122,6 +123,7 @@ int main() {
   benchmark_dat << "\n\n";
 
   // Benchmark a single group of various sizes.
+  benchmark_dat << "# num_groups, group_size, num_agents, mean_elapsed (ms)\n";
   for (unsigned i = 0; i <= 10; i++) {
     duration_t mean_elapsed;;
     unsigned num_agents = 0;
@@ -137,7 +139,10 @@ int main() {
       time_ms elapsed = run_sim(sir);
       mean_elapsed += (elapsed - mean_elapsed) / n;
     }
-    benchmark_dat << num_groups << ", " << num_agents << ", " << mean_elapsed << '\n';
+    benchmark_dat << num_groups << ", "
+                  << group_size << ", "
+                  << num_agents << ", "
+                  << mean_elapsed << '\n';
   }
 
 }

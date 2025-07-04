@@ -33,3 +33,6 @@ benchmark.out : benchmark.cpp sir_social.hpp
 
 data/benchmark.dat: benchmark.out
 	./benchmark.out
+
+plot_benchmark_1.png: data/benchmark.dat plot_benchmark.gnuplot
+	gnuplot plot_benchmark.gnuplot
