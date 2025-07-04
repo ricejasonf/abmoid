@@ -27,3 +27,9 @@ plot_pandemic.png: data/pandemic.dat data/world2.dat
 
 plot_pandemic_time_series.png: data/pandemic.dat
 	gnuplot plot_pandemic_time_series.gnuplot
+
+benchmark.out : benchmark.cpp sir_social.hpp
+	$(CXX) -O3 -std=c++23 -I../../include/ benchmark.cpp -o benchmark.out
+
+data/benchmark.dat: benchmark.out
+	./benchmark.out
